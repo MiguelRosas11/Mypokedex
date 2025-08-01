@@ -1,4 +1,4 @@
-package com.example.mypokedex
+package com.example.mypokedex.ui.features.home
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
