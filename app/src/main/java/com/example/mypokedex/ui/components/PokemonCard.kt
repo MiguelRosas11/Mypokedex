@@ -37,7 +37,7 @@ fun PokemonCard(pokemon: Pokemon){
 
             AsyncImage(
                 model = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png",
-                contentDescription = pokemon.nombre,
+                contentDescription = pokemon.name,
                 modifier = Modifier
                     .size(128.dp)
                     .padding(8.dp)
@@ -45,7 +45,7 @@ fun PokemonCard(pokemon: Pokemon){
 
 
             Text(
-                text = pokemon.nombre.replaceFirstChar { it.uppercase() },
+                text = pokemon.name.replaceFirstChar { it.uppercase() },
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 8.dp)

@@ -6,22 +6,28 @@ enum class PokemonType{
     FIRE,
     GRASS,
     ELECTRIC,
-    ROCK;
+    ROCK,
+    PSYCHIC;
 }
 
 
 data class Pokemon(
-    var id: Int = 0,
-    val nombre: String,
+    var numeroPokedex: Int = 0,
+    val name: String,
     val maxHP: Int,
     val type: PokemonType
 ){
-    companion object{
-        private var idCounter = 0
+    var id: Int = 0
+    init {
+        id = getNextId()
+    }
 
-        fun CreatePokemon(nombre: String, maxHP: Int, type: PokemonType): Pokemon {
+
+    companion object {
+        private var idCounter = 0
+        fun getNextId(): Int {
             idCounter++
-            return Pokemon(idCounter, nombre, maxHP, type)
+            return idCounter
         }
     }
 
