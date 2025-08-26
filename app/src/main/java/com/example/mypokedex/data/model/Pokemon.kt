@@ -12,24 +12,17 @@ enum class PokemonType{
 
 
 data class Pokemon(
-    var numeroPokedex: Int = 0,
+    val id: Int,
     val name: String,
     val maxHP: Int,
-    val type: PokemonType
-){
-    var id: Int = 0
-    init {
-        id = getNextId()
-    }
+    val type: PokemonType,
+) {
 
 
-    companion object {
-        private var idCounter = 0
-        fun getNextId(): Int {
-            idCounter++
-            return idCounter
-        }
-    }
+    val imageUrl: String
+        get() = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$id.png"
 
 }
+
+
 
