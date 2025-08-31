@@ -1,16 +1,14 @@
 package com.example.mypokedex.ui.components
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.mypokedex.ui.features.home.SortOrder
 
 /**
- * Botón flotante para ordenar la lista de Pokémon.
- * Implementa state hoisting - no maneja su propio estado de ordenamiento.
+ * Versión ultra simple del botón flotante usando ícono básico
  */
 @Composable
 fun SortFloatingButton(
@@ -25,16 +23,8 @@ fun SortFloatingButton(
         contentColor = MaterialTheme.colorScheme.onPrimary
     ) {
         Icon(
-            imageVector = getSortIcon(currentSortOrder),
+            imageVector = Icons.Default.List, // Ícono de lista - siempre disponible
             contentDescription = "Ordenar por ${currentSortOrder.displayName}"
         )
     }
-}
-
-/**
- * Función helper para obtener el ícono apropiado según el tipo de ordenamiento
- */
-private fun getSortIcon(sortOrder: SortOrder): ImageVector {
-    // Por ahora usamos el mismo ícono para todos, pero se puede personalizar
-    return Icons.Default.Sort
 }
