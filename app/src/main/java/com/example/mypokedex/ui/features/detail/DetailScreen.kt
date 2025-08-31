@@ -19,15 +19,17 @@ import com.example.mypokedex.ui.theme.MypokedexTheme
 @Composable
 fun DetailScreen(
     pokemon: Pokemon,
+    isFavorite: Boolean,
     onBack: () -> Unit = {},
-    onFavorite: () -> Unit = {}
+    onToggleFavorite: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
             DetailTopBar(
                 pokemonName = pokemon.name,
+                isFavorite = isFavorite,
                 onBack = onBack,
-                onFavorite = onFavorite
+                onToggleFavorite = onToggleFavorite
             )
         }
     ) { padding ->
@@ -70,7 +72,9 @@ fun DetailScreenPreview() {
                     PokemonStat("Defense", 40)
                 )
             ),
-            onBack = {}
+            isFavorite = true, // Para el preview
+            onBack = {},
+            onToggleFavorite = {}
         )
     }
 }
