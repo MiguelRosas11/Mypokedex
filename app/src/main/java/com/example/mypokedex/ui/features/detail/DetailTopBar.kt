@@ -1,25 +1,38 @@
 package com.example.mypokedex.ui.features.detail
 
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import com.example.mypokedex.ui.components.FavoriteButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailTopBar(
     pokemonName: String,
+    isFavorite: Boolean,
     onBack: () -> Unit,
-    onFavorite: () -> Unit
+    onToggleFavorite: () -> Unit
 ) {
     TopAppBar(
-        title = { Text(text = pokemonName) },
+        title = {
+            Text(
+                text = pokemonName.replaceFirstChar { it.uppercase() }
+            )
+        },
         navigationIcon = {
-            TextButton(onClick = onBack) { Text("←") }   // flecha simple, sin íconos
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Volver"
+                )
+            }
         },
         actions = {
-            TextButton(onClick = onFavorite) { Text("♡") } // corazón simple, sin íconos
+            FavoriteButton(
+                isFavorite = isFavorite,
+                onToggleFavorite = onToggleFavorite
+            )
         }
     )
 }
