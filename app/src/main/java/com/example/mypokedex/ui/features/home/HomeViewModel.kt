@@ -1,10 +1,24 @@
 package com.example.mypokedex.ui.features.home
 
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import com.example.mypokedex.data.model.Pokemon
 import com.example.mypokedex.data.model.PokemonStat
 import com.example.mypokedex.data.model.PokemonType
+import java.util.Locale
 
-class HomeViewModel {
+class HomeViewModel(private val appContext: Context) : ViewModel() {
+
+    private var currentPage = 0
+    private val pageSize = 10
+
+    private fun buildChunkFilename(page: Int = currentPage): String {
+        val start = page * pageSize + 1
+        val end = (page + 1) * pageSize
+        return "pokemon_%03d_%d.json".format(Locale.US, start, end)
+    }
+
     fun getPokemonList(): List<Pokemon> {
         return listOf(
             Pokemon(
@@ -128,5 +142,15 @@ class HomeViewModel {
                 )
             )
         )
+    }
+
+    companion object {
+        fun provideFactory(context: Context): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    return HomeViewModel(context.applicationContext) as T
+                }
+            }
     }
 }
