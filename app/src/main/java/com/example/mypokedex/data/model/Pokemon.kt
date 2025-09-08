@@ -1,8 +1,6 @@
 package com.example.mypokedex.data.model
 
-import kotlinx.serialization.Serializable
 
-@Serializable
 data class Pokemon(
     val id: Int,
     val name: String,
@@ -15,14 +13,14 @@ data class Pokemon(
         get() = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$id.png"
 }
 
-@Serializable
 enum class PokemonType {
     NORMAL, FIRE, WATER, GRASS, ELECTRIC, FIGHTING, POISON, GROUND,
     FLYING, PSYCHIC, BUG, ROCK, GHOST, DARK, DRAGON, STEEL, FAIRY, ICE
 }
 
-@Serializable
 data class PokemonStat(
     val name: String,   // "HP", "Attack", etc.
     val value: Int
 )
+
+
