@@ -1,27 +1,37 @@
 package com.example.mypokedex.ui.features.home
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.mypokedex.data.model.Pokemon
-import com.example.mypokedex.ui.components.PokemonCard
-import com.example.mypokedex.ui.components.SortFloatingButton
-import java.util.*
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,111 +39,44 @@ fun HomeScreen(
     viewModel: HomeViewModel = HomeViewModel(),
     modifier: Modifier = Modifier
 ) {
-    // Estado de búsqueda que persiste durante rotaciones y recreaciones
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
-    // Estado de ordenamiento que persiste durante rotaciones
-    var currentSortOrder by rememberSaveable { mutableStateOf(SortOrder.ID_ASCENDING) }
-
-    // Obtener la lista completa de Pokémon
-    val pokemonList = viewModel.getPokemonList()
-
-    // Lista derivada: filtrar y ordenar sin mutar la lista original
-    val processedPokemonList by remember(pokemonList, searchQuery, currentSortOrder) {
-        derivedStateOf {
-            // Primero filtrar
-            val filtered = if (searchQuery.isBlank()) {
-                pokemonList
-            } else {
-                pokemonList.filter { pokemon ->
-                    pokemon.name.lowercase(Locale.getDefault())
-                        .contains(searchQuery.lowercase(Locale.getDefault()))
-                }
-            }
-
-            // Luego ordenar
-            sortPokemonList(filtered, currentSortOrder)
+    val all = remember { viewModel.getPokemonList() }
+    val filtered = remember(all, searchQuery) {
+        if (searchQuery.isBlank()) all
+        else all.filter {
+            it.name.lowercase(Locale.getDefault())
+                .contains(searchQuery.lowercase(Locale.getDefault()))
         }
     }
 
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        floatingActionButton = {
-            SortFloatingButton(
-                currentSortOrder = currentSortOrder,
-                onSortClick = {
-                    currentSortOrder = currentSortOrder.next()
-                }
-            )
-        }
-    ) { paddingValues ->
-        Column(
+    Scaffold(modifier = modifier.fillMaxSize()) { padding ->
+        androidx.compose.foundation.layout.Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(padding)
         ) {
-            // Barra de búsqueda
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = {
-                    Text("Buscar Pokémon...")
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Buscar"
-                    )
-                },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(
-                            onClick = { searchQuery = "" }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Clear,
-                                contentDescription = "Limpiar búsqueda"
-                            )
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Filled.Clear, contentDescription = null)
                         }
                     }
                 },
+                placeholder = { Text("Buscar Pokémon...") },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Search
-                ),
-                keyboardActions = KeyboardActions(
-                    onSearch = {
-                        keyboardController?.hide()
-                    }
-                )
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .fillMaxSize(fraction = 0.0f), // evita warnings con fillMaxWidth en imports mínimos
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search)
             )
 
-            // Indicador de ordenamiento actual
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
-            ) {
-                Text(
-                    text = "Ordenado por: ${currentSortOrder.displayName}",
-                    modifier = Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
-
-            // Contenido principal
-            if (processedPokemonList.isEmpty() && searchQuery.isNotEmpty()) {
-                // Mostrar mensaje cuando no hay resultados
-                Box(
+            if (filtered.isEmpty() && searchQuery.isNotEmpty()) {
+                androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(32.dp),
@@ -146,15 +89,15 @@ fun HomeScreen(
                     )
                 }
             } else {
-                // Grid de Pokémon procesados (filtrados y ordenados)
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    items(processedPokemonList) { pokemon ->
-                        PokemonCard(pokemon = pokemon)
+                    items(filtered, key = { it.id }) { p ->
+                        PokemonSimpleCard(pokemon = p)
                     }
                 }
             }
@@ -162,15 +105,19 @@ fun HomeScreen(
     }
 }
 
-/**
- * Función que ordena la lista de Pokémon según el criterio especificado
- */
-private fun sortPokemonList(pokemonList: List<Pokemon>, sortOrder: SortOrder): List<Pokemon> {
-    return when (sortOrder) {
-        SortOrder.ID_ASCENDING -> pokemonList.sortedBy { it.id }
-        SortOrder.ID_DESCENDING -> pokemonList.sortedByDescending { it.id }
-        SortOrder.NAME_ASCENDING -> pokemonList.sortedBy { it.name.lowercase() }
-        SortOrder.NAME_DESCENDING -> pokemonList.sortedByDescending { it.name.lowercase() }
+@Composable
+private fun PokemonSimpleCard(pokemon: Pokemon) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        androidx.compose.foundation.layout.Column(Modifier.padding(12.dp)) {
+            Text(text = "#${pokemon.id}  ${pokemon.name}", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = pokemon.types.joinToString(" / "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
