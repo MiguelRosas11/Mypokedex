@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -53,6 +54,23 @@ fun HomeScreen(
     }
 
     val keyboardController = LocalSoftwareKeyboardController.current
+    val gridState = rememberLazyGridState()
+
+    // Detectar cuando el usuario llega al final de la lista
+    LaunchedEffect(gridState) {
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo }
+            .collect { visibleItems ->
+                if (visibleItems.isNotEmpty()) {
+                    val lastVisibleItem = visibleItems.last()
+                    val totalItems = gridState.layoutInfo.totalItemsCount
+
+                    // Cargar más cuando esté cerca del final
+                    if (lastVisibleItem.index >= totalItems - 4) {
+                        viewModel.loadMorePokemon()
+                    }
+                }
+            }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -90,20 +108,41 @@ fun HomeScreen(
                 keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() })
             )
 
-            Card(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Ordenado por: ${currentSortOrder.displayName}",
-                    modifier = Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+                Card(
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Text(
+                        text = "Ordenado por: ${currentSortOrder.displayName}",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+
+                // Mostrar total de Pokémon cargados
+                Card(
+                    modifier = Modifier.padding(start = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Text(
+                        text = "${pokemonList.size} Pokémon",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
 
             if (processedPokemonList.isEmpty() && searchQuery.isNotEmpty()) {
@@ -122,12 +161,29 @@ fun HomeScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
+                    state = gridState,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(processedPokemonList) { pokemon ->
                         PokemonCard(pokemon = pokemon)
+                    }
+
+                    // Mostrar un indicador de carga al final
+                    if (processedPokemonList.isNotEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
