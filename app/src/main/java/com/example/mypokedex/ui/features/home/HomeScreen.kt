@@ -1,5 +1,6 @@
 package com.example.mypokedex.ui.features.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +38,7 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = HomeViewModel(),
+    onPokemonClick: (Int) -> Unit = {}, // Callback para navegación
     modifier: Modifier = Modifier
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -96,8 +98,11 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(filtered, key = { it.id }) { p ->
-                        PokemonSimpleCard(pokemon = p)
+                    items(filtered, key = { it.id }) { pokemon ->
+                        PokemonSimpleCard(
+                            pokemon = pokemon,
+                            onClick = { onPokemonClick(pokemon.id) } // Pasar el callback
+                        )
                     }
                 }
             }
@@ -106,9 +111,13 @@ fun HomeScreen(
 }
 
 @Composable
-private fun PokemonSimpleCard(pokemon: Pokemon) {
+private fun PokemonSimpleCard(
+    pokemon: Pokemon,
+    onClick: () -> Unit = {} // Agregar callback de click
+) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.clickable { onClick() } // Hacer la tarjeta clickeable
     ) {
         androidx.compose.foundation.layout.Column(Modifier.padding(12.dp)) {
             Text(text = "#${pokemon.id}  ${pokemon.name}", style = MaterialTheme.typography.titleMedium)
