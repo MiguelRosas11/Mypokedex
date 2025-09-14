@@ -54,7 +54,7 @@ fun MyPokedexApp(
             HomeScreen(
                 viewModel = homeViewModel,
                 onPokemonClick = { pokemonId ->
-                    // Navegación al detalle del Pokémon
+                    // Navegación al poke
                     navController.navigate(AppScreens.DetailScreen.createRoute(pokemonId))
                 }
             )
@@ -64,11 +64,11 @@ fun MyPokedexApp(
         composable(
             route = AppScreens.DetailScreen.route
         ) { backStackEntry ->
-            // Extraer el ID del Pokémon de los argumentos de navegación
+            // ahora se Extrae el ID del Poke de la navegacion
             val pokemonId = backStackEntry.arguments?.getString("pokemonId")?.toIntOrNull()
 
             if (pokemonId != null) {
-                // Buscar el Pokémon en el ViewModel
+                // se busca el poke en  el ViewModel
                 val pokemon = homeViewModel.getPokemonList().find { it.id == pokemonId }
 
                 if (pokemon != null) {
@@ -80,7 +80,7 @@ fun MyPokedexApp(
                         }
                     )
                 } else {
-                    // Pokémon no encontrado - podrías mostrar una pantalla de error
+                    // Poke no encontrado
                     // Por ahora, navegar de vuelta al inicio
                     navController.navigate(AppScreens.HomeScreen.route) {
                         popUpTo(AppScreens.HomeScreen.route) {
@@ -99,7 +99,6 @@ fun MyPokedexApp(
         }
 
         // Futuras pantallas se pueden agregar aquí
-        // Por ejemplo, SearchToolsDialog si se implementa como pantalla completa
         composable(route = AppScreens.SearchToolsDialog.route) {
             // Implementación futura del diálogo de herramientas
         }
