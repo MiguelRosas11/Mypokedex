@@ -1,10 +1,11 @@
 package com.example.mypokedex.ui.features.home
 
+import androidx.lifecycle.ViewModel
 import com.example.mypokedex.data.model.Pokemon
 import com.example.mypokedex.data.model.PokemonStat
 import com.example.mypokedex.data.model.PokemonType
 
-class HomeViewModel {
+class HomeViewModel : ViewModel() {
     fun getPokemonList(): List<Pokemon> {
         return listOf(
             Pokemon(
