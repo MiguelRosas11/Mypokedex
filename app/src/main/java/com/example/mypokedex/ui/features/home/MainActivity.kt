@@ -19,6 +19,8 @@ import com.example.mypokedex.data.model.PokemonType
 import com.example.mypokedex.navigation.AppScreens
 import com.example.mypokedex.ui.features.detail.DetailContainer
 import com.example.mypokedex.ui.theme.MypokedexTheme
+import androidx.navigation.compose.dialog
+import com.example.mypokedex.ui.features.home.SearchToolsDialog
 
 class MainActivity : ComponentActivity() {
 
@@ -98,9 +100,10 @@ fun MyPokedexApp(
             }
         }
 
-        // Futuras pantallas se pueden agregar aquí
-        composable(route = AppScreens.SearchToolsDialog.route) {
-            // Implementación futura del diálogo de herramientas
+        dialog(route = AppScreens.SearchToolsDialog.route) {
+            SearchToolsDialog(
+                onClose = { navController.popBackStack() }
+            )
         }
     }
 }

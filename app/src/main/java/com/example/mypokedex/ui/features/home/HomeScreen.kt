@@ -3,7 +3,9 @@ package com.example.mypokedex.ui.features.home
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -32,6 +34,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.mypokedex.data.model.Pokemon
+import com.example.mypokedex.ui.components.SortFloatingButton
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,6 +42,7 @@ import java.util.Locale
 fun HomeScreen(
     viewModel: HomeViewModel = HomeViewModel(),
     onPokemonClick: (Int) -> Unit = {}, // Callback para navegación
+    onOpenSearchTools: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -52,12 +56,35 @@ fun HomeScreen(
         }
     }
 
-    Scaffold(modifier = modifier.fillMaxSize()) { padding ->
+    Scaffold(modifier = modifier.fillMaxSize(),
+        floatingActionButton = {
+            SortFloatingButton(
+                currentSortOrder = SortOrder.ID_ASCENDING,
+                onSortClick = onOpenSearchTools
+            )
+        }
+    ) { padding ->
         androidx.compose.foundation.layout.Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Pokédex",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onOpenSearchTools) {
+                    Icon(Icons.Filled.Search, contentDescription = "Herramientas de búsqueda")
+                }
+            }
+
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },

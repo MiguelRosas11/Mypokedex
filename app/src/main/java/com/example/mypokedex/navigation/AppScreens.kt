@@ -6,7 +6,7 @@ package com.example.mypokedex.navigation
 sealed class AppScreens(val route: String) {
 
     /**
-     * Pantalla principal que muestra la lista de Pokémon con funcionalidad de ña busqueda
+     * Pantalla principal que muestra la lista de Pokémon con funcionalidad de la busqueda
      */
     object HomeScreen : AppScreens("home_screen")
 
