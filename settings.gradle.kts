@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Mypokedex"
 include(":app")
+project(":app").projectDir = file("app")

@@ -36,7 +36,7 @@ fun PokemonCard(pokemon: Pokemon){
         ) {
 
             AsyncImage(
-                model = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png",
+                model = pokemon.imageUrl,
                 contentDescription = pokemon.name,
                 modifier = Modifier
                     .size(128.dp)
