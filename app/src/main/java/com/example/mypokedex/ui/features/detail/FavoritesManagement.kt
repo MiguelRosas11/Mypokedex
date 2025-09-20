@@ -9,13 +9,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
  */
 @Composable
 fun rememberFavoritesState(): FavoritesState {
-    // Set de IDs de Pokémon favoritos que persiste durante rotaciones
-    val favoriteIds by rememberSaveable {
-        mutableStateOf(mutableSetOf<Int>())
+    // Set de IDs de Pokes favoritos que persiste durante rotaciones
+    var favoriteIds by rememberSaveable {
+        mutableStateOf(setOf<Int>())
     }
 
-    return remember {
-        FavoritesState(favoriteIds)
+    return remember(favoriteIds) {
+        FavoritesState(
+            favoriteIds = favoriteIds,
+            onFavoritesChanged = { newFavorites ->
+                favoriteIds = newFavorites
+            }
+        )
     }
 }
 
@@ -23,7 +28,8 @@ fun rememberFavoritesState(): FavoritesState {
  * Clase que encapsula el estado y las operaciones de favoritos
  */
 class FavoritesState(
-    private val favoriteIds: MutableSet<Int>
+    private val favoriteIds: Set<Int>,
+    private val onFavoritesChanged: (Set<Int>) -> Unit
 ) {
     /**
      * Verifica si un Pokémon es favorito
@@ -36,17 +42,21 @@ class FavoritesState(
      * Alterna el estado de favorito de un Pokémon
      */
     fun toggleFavorite(pokemonId: Int) {
-        if (favoriteIds.contains(pokemonId)) {
-            favoriteIds.remove(pokemonId)
+        val newFavorites = if (favoriteIds.contains(pokemonId)) {
+            favoriteIds - pokemonId
         } else {
-            favoriteIds.add(pokemonId)
+            favoriteIds + pokemonId
         }
+        onFavoritesChanged(newFavorites)
+
+        // Debug: Verificar que funciona
+        println("DEBUG: Pokemon $pokemonId toggled. Favorites: $newFavorites")
     }
 
     /**
      * Obtiene la lista de IDs de Pokémon favoritos
      */
     fun getFavoriteIds(): Set<Int> {
-        return favoriteIds.toSet()
+        return favoriteIds
     }
 }

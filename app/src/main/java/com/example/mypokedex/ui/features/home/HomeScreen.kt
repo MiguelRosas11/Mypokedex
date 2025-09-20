@@ -13,8 +13,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,13 +33,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.mypokedex.data.model.Pokemon
 import com.example.mypokedex.ui.components.SortFloatingButton
+import com.example.mypokedex.ui.components.PokemonCard // Importar PokemonCard
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = HomeViewModel(),
-    onPokemonClick: (Int) -> Unit = {}, // Callback para navegación
+    onPokemonClick: (Int) -> Unit = {}, // Callback para navegacion
     onOpenSearchTools: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -100,7 +99,7 @@ fun HomeScreen(
                 singleLine = true,
                 modifier = Modifier
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .fillMaxSize(fraction = 0.0f), // evita warnings con fillMaxWidth en imports mínimos
+                    .fillMaxWidth(),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search)
             )
 
@@ -126,33 +125,15 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(filtered, key = { it.id }) { pokemon ->
-                        PokemonSimpleCard(
-                            pokemon = pokemon,
-                            onClick = { onPokemonClick(pokemon.id) } // Pasar el callback
-                        )
+                        // Usar PokemonCard con clickable en lugar de PokemonSimpleCard esto era por lo que no se podia ver antes
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.clickable { onPokemonClick(pokemon.id) }
+                        ) {
+                            PokemonCard(pokemon = pokemon) ///
+                        }
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PokemonSimpleCard(
-    pokemon: Pokemon,
-    onClick: () -> Unit = {} // Agregar callback de click
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier.clickable { onClick() } // Hacer la tarjeta clickeable
-    ) {
-        androidx.compose.foundation.layout.Column(Modifier.padding(12.dp)) {
-            Text(text = "#${pokemon.id}  ${pokemon.name}", style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = pokemon.types.joinToString(" / "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

@@ -17,10 +17,10 @@ import com.example.mypokedex.data.model.Pokemon
 import com.example.mypokedex.data.model.PokemonStat
 import com.example.mypokedex.data.model.PokemonType
 import com.example.mypokedex.navigation.AppScreens
-import com.example.mypokedex.ui.features.detail.DetailContainer
+import com.example.mypokedex.ui.features.detail.DetailScreen
+import com.example.mypokedex.ui.features.detail.rememberFavoritesState
 import com.example.mypokedex.ui.theme.MypokedexTheme
 import androidx.navigation.compose.dialog
-import com.example.mypokedex.ui.features.home.SearchToolsDialog
 
 class MainActivity : ComponentActivity() {
 
@@ -47,6 +47,9 @@ fun MyPokedexApp(
     navController: NavHostController = rememberNavController(),
     homeViewModel: HomeViewModel
 ) {
+    // Estado global de favoritos
+    val favoritesState = rememberFavoritesState()
+
     NavHost(
         navController = navController,
         startDestination = AppScreens.HomeScreen.route
@@ -56,7 +59,7 @@ fun MyPokedexApp(
             HomeScreen(
                 viewModel = homeViewModel,
                 onPokemonClick = { pokemonId ->
-                    // Navegación al poke
+                    // Navegación al detalle
                     navController.navigate(AppScreens.DetailScreen.createRoute(pokemonId))
                 }
             )
@@ -66,19 +69,28 @@ fun MyPokedexApp(
         composable(
             route = AppScreens.DetailScreen.route
         ) { backStackEntry ->
-            // ahora se Extrae el ID del Poke de la navegacion
+            // Extraer el ID del Poke de la navegación
             val pokemonId = backStackEntry.arguments?.getString("pokemonId")?.toIntOrNull()
 
             if (pokemonId != null) {
-                // se busca el poke en  el ViewModel
+                // Buscar el Poke en el ViewModel
                 val pokemon = homeViewModel.getPokemonList().find { it.id == pokemonId }
 
                 if (pokemon != null) {
-                    DetailContainer(
+                    val isFavorite = favoritesState.isFavorite(pokemon.id)
+                    println("DEBUG: Pokemon ${pokemon.name} (${pokemon.id}) is favorite: $isFavorite")
+
+                    DetailScreen(
                         pokemon = pokemon,
+                        isFavorite = isFavorite,
                         onBack = {
                             // Navegar de vuelta a la pantalla anterior
                             navController.popBackStack()
+                        },
+                        onToggleFavorite = {
+                            // Manejar el toggle de favoritos
+                            println("DEBUG: Toggling favorite for ${pokemon.name}")
+                            favoritesState.toggleFavorite(pokemon.id)
                         }
                     )
                 } else {

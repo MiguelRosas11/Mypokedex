@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -23,13 +24,21 @@ fun DetailScreen(
     onBack: () -> Unit = {},
     onToggleFavorite: () -> Unit = {}
 ) {
+    // Debug: Log cuando cambia el estado de favorito
+    LaunchedEffect(isFavorite) {
+        println("DEBUG: DetailScreen - Pokemon ${pokemon.name} isFavorite changed to: $isFavorite")
+    }
+
     Scaffold(
         topBar = {
             DetailTopBar(
                 pokemonName = pokemon.name,
                 isFavorite = isFavorite,
                 onBack = onBack,
-                onToggleFavorite = onToggleFavorite
+                onToggleFavorite = {
+                    println("DEBUG: DetailTopBar - Toggle button clicked for ${pokemon.name}")
+                    onToggleFavorite()
+                }
             )
         }
     ) { padding ->

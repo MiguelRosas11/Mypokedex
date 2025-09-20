@@ -55,6 +55,18 @@ class HomeViewModel : ViewModel() {
                     PokemonStat("Attack", 55),
                     PokemonStat("Defense", 40)
                 )
+            ), //se agrego xd
+            Pokemon(
+                id = 150,
+                name = "Mewtwo",
+                types = listOf(PokemonType.PSYCHIC),
+                height = 2.0f,
+                weight = 122.0f,
+                stats = listOf(
+                    PokemonStat("HP", 106),
+                    PokemonStat("Attack", 110),
+                    PokemonStat("Defense", 90)
+                )
             )
         )
     }
