@@ -41,6 +41,7 @@ fun DetailContainerPreview() {
             pokemon = Pokemon(
                 id = 25,
                 name = "Pikachu",
+                imageUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png",
                 types = listOf(PokemonType.ELECTRIC),
                 height = 0.4f,
                 weight = 6.0f,
