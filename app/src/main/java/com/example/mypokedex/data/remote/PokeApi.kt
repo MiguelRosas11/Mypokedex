@@ -18,4 +18,3 @@ interface PokeApi {
         @Path("idOrName") idOrName: String
     ): PokemonDetailDto
 }
-

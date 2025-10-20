@@ -17,11 +17,40 @@ data class PokemonEntryDto(
 data class PokemonDetailDto(
     @Json(name = "id") val id: Int,
     @Json(name = "name") val name: String,
-    @Json(name = "sprites") val sprites: Sprites
+    @Json(name = "height") val height: Int,  // en decímetros
+    @Json(name = "weight") val weight: Int,  // en hectogramos
+    @Json(name = "sprites") val sprites: SpritesDto,
+    @Json(name = "types") val types: List<PokemonTypeSlotDto>,
+    @Json(name = "stats") val stats: List<PokemonStatDto>
 )
 
-data class Sprites(
+data class SpritesDto(
+    @Json(name = "front_default") val front_default: String?,
+    @Json(name = "other") val other: OtherSpritesDto? = null
+)
+
+data class OtherSpritesDto(
+    @Json(name = "official-artwork") val officialArtwork: OfficialArtworkDto? = null
+)
+
+data class OfficialArtworkDto(
     @Json(name = "front_default") val front_default: String?
 )
 
+data class PokemonTypeSlotDto(
+    @Json(name = "slot") val slot: Int,
+    @Json(name = "type") val type: TypeDto
+)
 
+data class TypeDto(
+    @Json(name = "name") val name: String
+)
+
+data class PokemonStatDto(
+    @Json(name = "base_stat") val base_stat: Int,
+    @Json(name = "stat") val stat: StatDto
+)
+
+data class StatDto(
+    @Json(name = "name") val name: String
+)

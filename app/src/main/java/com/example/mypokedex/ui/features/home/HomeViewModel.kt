@@ -11,6 +11,7 @@ class HomeViewModel : ViewModel() {
             Pokemon(
                 id = 1,
                 name = "Bulbasaur",
+                imageUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/1.png",
                 types = listOf(PokemonType.GRASS, PokemonType.POISON),
                 height = 0.7f,
                 weight = 6.9f,
@@ -23,6 +24,7 @@ class HomeViewModel : ViewModel() {
             Pokemon(
                 id = 4,
                 name = "Charmander",
+                imageUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/4.png",
                 types = listOf(PokemonType.FIRE),
                 height = 0.6f,
                 weight = 8.5f,
@@ -35,6 +37,7 @@ class HomeViewModel : ViewModel() {
             Pokemon(
                 id = 7,
                 name = "Squirtle",
+                imageUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/7.png",
                 types = listOf(PokemonType.WATER),
                 height = 0.5f,
                 weight = 9.0f,
@@ -47,6 +50,7 @@ class HomeViewModel : ViewModel() {
             Pokemon(
                 id = 25,
                 name = "Pikachu",
+                imageUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png",
                 types = listOf(PokemonType.ELECTRIC),
                 height = 0.4f,
                 weight = 6.0f,
@@ -55,10 +59,11 @@ class HomeViewModel : ViewModel() {
                     PokemonStat("Attack", 55),
                     PokemonStat("Defense", 40)
                 )
-            ), //se agrego xd
+            ),
             Pokemon(
                 id = 150,
                 name = "Mewtwo",
+                imageUrl = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png",
                 types = listOf(PokemonType.PSYCHIC),
                 height = 2.0f,
                 weight = 122.0f,
