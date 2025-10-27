@@ -17,8 +17,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MypokedexTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // USA AppNav() en lugar de MyPokedexApp
-                    // AppNav ya tiene toda la navegación configurada correctamente
+
                     AppNav()
                 }
             }

@@ -38,7 +38,7 @@ fun AppNav() {
     val networkMonitor = NetworkMonitor(context)
 
     val repo = PokemonRepository(
-        api = NetworkModule.api(),
+        api = NetworkModule.api,
         dao = database.pokemonDao(),
         preferencesDataStore = preferencesDataStore,
         networkMonitor = networkMonitor
