@@ -35,17 +35,17 @@ class AuthRepository {
      * Autenticación anónima (la mas quick para la compe)
      * Genera un UID único que podemos personalizar
      */
-    suspend fun signInAnonymously(): Result<FirebaseUser> {
+    suspend fun signInAnonymously(): Resource<FirebaseUser> {
         return try {
             val result = auth.signInAnonymously().await()
             val user = result.user
             if (user != null) {
-                Result.Success(user)
+                Resource.Success(user) //
             } else {
-                Result.Error("Error al autenticar")
+                Resource.Error("Error al autenticar")
             }
         } catch (e: Exception) {
-            Result.Error("Error: ${e.localizedMessage}")
+            Resource.Error("Error: ${e.localizedMessage}")
         }
     }
 
@@ -54,21 +54,20 @@ class AuthRepository {
      * El usuario ingresa un alias corto (4-8 caracteres)
      * Se crea una cuenta anonima y se usa el alias como identificador
      */
-    suspend fun signInWithAlias(alias: String): Result<String> {
+    suspend fun signInWithAlias(alias: String): Resource<String> {
         return try {
             // Validar alias
             if (alias.length !in 3..8) {
-                return Result.Error("El alias debe tener entre 3 y 8 caracteres")
+                return Resource.Error("El alias debe tener entre 3 y 8 caracteres")
             }
 
             // Crear cuenta anónima
             val authResult = auth.signInAnonymously().await()
-            val uid = authResult.user?.uid ?: return Result.Error("Error al autenticar")
-
+            val uid = authResult.user?.uid ?: return Resource.Error("Error al autenticar")
             // El alias se guardará en Firebase Database junto con el UID
-            Result.Success(uid)
+            Resource.Success(uid)
         } catch (e: Exception) {
-            Result.Error("Error: ${e.localizedMessage}")
+            Resource.Error("Error: ${e.localizedMessage}")
         }
     }
 
@@ -101,7 +100,7 @@ class AuthRepository {
     }
 }
 
-sealed class Result<out T> {
-    data class Success<T>(val data: T) : Result<T>()
-    data class Error(val message: String) : Result<Nothing>()
+sealed class Resource<out T> {
+    data class Success<T>(val data: T) : Resource<T>()
+    data class Error(val message: String) : Resource<Nothing>()
 }

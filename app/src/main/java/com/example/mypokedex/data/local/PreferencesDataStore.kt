@@ -15,7 +15,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class PreferencesDataStore(private val context: Context) {
 
     companion object {
-        // ← CAMBIO AQUÍ: usar stringPreferencesKey en lugar de stringPreference
+        // usar stringPreferencesKey en lugar de stringPreference
         private val SORT_ORDER_KEY = stringPreferencesKey("sort_order")
         private val SORT_DIRECTION_KEY = stringPreferencesKey("sort_direction")
 

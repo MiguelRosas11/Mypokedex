@@ -22,6 +22,7 @@ import com.example.mypokedex.ui.pokedex.PokedexScreen
 import com.example.mypokedex.ui.pokedex.PokedexViewModel
 import com.example.mypokedex.ui.exchange.ExchangeScreen
 import com.example.mypokedex.ui.exchange.ExchangeViewModel
+import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.launch
 
 
@@ -55,7 +56,11 @@ fun AppNav() {
 
     val authRepo = remember { AuthRepository() }
     val favoritesRepo = remember { FavoritesRepository() }
-    val exchangeRepo = remember { ExchangeRepository() }
+    // ¡CAMBIO CLAVE AQUÍ!
+    // Instancia la clase de implementación concreta, pasándole la dependencia que necesita (FirebaseDatabase)
+    val exchangeRepo: ExchangeRepository = remember {
+        ExchangeRepository(FirebaseDatabase.getInstance())
+    }
 
     // Estado de autenticación
     val currentUser by authRepo.currentUser.collectAsState(initial = null)
@@ -73,12 +78,12 @@ fun AppNav() {
                 scope.launch {
                     val result = authRepo.signInWithAlias(alias)
                     when (result) {
-                        is com.example.mypokedex.data.repository.Result.Success -> {
+                        is com.example.mypokedex.data.repository.Resource.Success -> {
                             showAuthModal = false
                             pendingAction?.invoke()
                             pendingAction = null
                         }
-                        is com.example.mypokedex.data.repository.Result.Error -> {
+                        is com.example.mypokedex.data.repository.Resource.Error -> {
                             // Mostrar error
                         }
                     }
@@ -143,7 +148,9 @@ fun AppNav() {
             val id = back.arguments!!.getInt("id").toString()
             val vm: DetailViewModel = viewModel(factory = object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(c: Class<T>): T = DetailViewModel(pokemonRepo) as T
+                override fun <T : ViewModel> create(c: Class<T>): T =
+                    //  repositorios necesarios
+                    DetailViewModel(pokemonRepo, authRepo, favoritesRepo) as T
             })
             LaunchedEffect(id) { vm.load(id) }
             val uiState by vm.state.collectAsState()
@@ -152,21 +159,23 @@ fun AppNav() {
                 state = uiState,
                 onBack = { nav.popBackStack() },
                 onToggleFavorite = { pokemonId, name, imageUrl ->
+                    // La UI solo notifica al ViewModel
                     requireAuth {
-                        scope.launch {
-                            val userId = authRepo.getCurrentUserId() ?: return@launch
-                            val isFavorite = favoritesRepo.isFavorite(userId, pokemonId)
-
-                            if (isFavorite) {
-                                favoritesRepo.removeFavorite(userId, pokemonId)
-                            } else {
-                                favoritesRepo.addFavorite(userId, pokemonId, name, imageUrl)
-                            }
-                        }
+                        vm.onToggleFavorite(pokemonId, name, imageUrl)
                     }
                 }
             )
         }
+
+
+        //composable de ejemplo para favoritos
+        composable(Dest.Favorites.route) {
+            // Aquí llamar a tu FavoritesScreen, por ahora un placeholder:
+            // Por ejemplo: FavoritesScreen(navController = nav)
+            // Text("Pantalla de Favoritos")
+        }
+
+
 
         // Pantalla de intercambio
         composable(Dest.Exchange.route) {
