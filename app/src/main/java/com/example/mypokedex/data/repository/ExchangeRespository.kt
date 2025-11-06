@@ -11,18 +11,12 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * Repository para gestionar intercambios de Pokémon
- *
- * Flujo del intercambio:
- * 1. Usuario A crea propuesta con su Pokémon
- * 2. Usuario B escanea QR y ve la propuesta
- * 3. Usuario B selecciona su Pokémon y acepta
- * 4. Se ejecuta transacción atómica
- * 5. Ambos usuarios reciben notificación
  */
-class ExchangeRepository {
-    private val database = FirebaseDatabase.getInstance()
-    private val exchangesRef = database.getReference("exchanges")
-    private val favoritesRef = database.getReference("favorites")
+class ExchangeRepository(
+    private val firebaseDatabase: FirebaseDatabase = FirebaseDatabase.getInstance()
+) {
+    private val exchangesRef = firebaseDatabase.getReference("exchanges")
+    private val favoritesRef = firebaseDatabase.getReference("favorites")
 
     /**
      * Crear propuesta de intercambio
@@ -104,28 +98,22 @@ class ExchangeRepository {
         pokemonBImageUrl: String
     ): kotlin.Result<Unit> {
         return try {
-            // Obtener propuesta
             val proposal = getExchangeProposal(exchangeId)
                 ?: return kotlin.Result.failure(Exception("Propuesta no encontrada"))
 
-            // Validar que la propuesta está pendiente
             if (proposal.status != ExchangeStatus.PENDING) {
                 return kotlin.Result.failure(Exception("Intercambio ya procesado"))
             }
 
-            // Validar timeout (90 segundos)
             val now = System.currentTimeMillis()
             if (now - proposal.createdAt > 90_000) {
-                // Marcar como expirado
                 exchangesRef.child(exchangeId)
                     .child("status")
                     .setValue(ExchangeStatus.EXPIRED.name)
                     .await()
-
                 return kotlin.Result.failure(Exception("Intercambio expirado"))
             }
 
-            // Ejecutar transacción atómica
             executeAtomicExchange(
                 exchangeId = exchangeId,
                 userAId = proposal.userAId,
@@ -145,14 +133,6 @@ class ExchangeRepository {
         }
     }
 
-    /**
-     * Ejecutar transacción atómica de intercambio
-     * Esta operación es ACID:
-     * - Atomic: Se completa totalmente o falla totalmente
-     * - Consistent: Los datos quedan en estado consistente
-     * - Isolated: No hay interferencia de otras operaciones
-     * - Durable: Los cambios son permanentes
-     */
     private suspend fun executeAtomicExchange(
         exchangeId: String,
         userAId: String,
@@ -166,7 +146,7 @@ class ExchangeRepository {
         pokemonBImageUrl: String
     ) {
         suspendCancellableCoroutine<Unit> { cont ->
-            val ref = database.reference
+            val ref = firebaseDatabase.reference
             ref.runTransaction(object : Transaction.Handler {
                 override fun doTransaction(currentData: MutableData): Transaction.Result {
                     try {
@@ -179,14 +159,11 @@ class ExchangeRepository {
                             .child(userBId)
                             .child(pokemonBId.toString())
 
-                        val pokemonAExists = pokemonAData.value != null
-                        val pokemonBExists = pokemonBData.value != null
-
-                        if (!pokemonAExists || !pokemonBExists) {
+                        if (pokemonAData.value == null || pokemonBData.value == null) {
                             return Transaction.abort()
                         }
 
-                        // Eliminar Pokémon de sus dueños originales
+                        // Eliminar Pokémon de dueños originales
                         currentData.child("favorites").child(userAId)
                             .child(pokemonAId.toString()).value = null
                         currentData.child("favorites").child(userBId)
@@ -241,17 +218,12 @@ class ExchangeRepository {
         }
     }
 
-
-    /**
-     * Cancelar intercambio
-     */
     suspend fun cancelExchange(exchangeId: String): kotlin.Result<Unit> {
         return try {
             exchangesRef.child(exchangeId)
                 .child("status")
                 .setValue(ExchangeStatus.CANCELLED.name)
                 .await()
-
             kotlin.Result.success(Unit)
         } catch (e: Exception) {
             kotlin.Result.failure(e)
@@ -259,9 +231,6 @@ class ExchangeRepository {
     }
 }
 
-/**
- * Modelo de propuesta de intercambio
- */
 data class ExchangeProposal(
     val id: String = "",
     val userAId: String = "",
@@ -279,12 +248,9 @@ data class ExchangeProposal(
     val completedAt: Long? = null
 )
 
-/**
- * Estados del intercambio
- */
 enum class ExchangeStatus {
-    PENDING,    // Esperando aceptación
-    COMPLETED,  // Completado exitosamente
-    CANCELLED,  // Cancelado por algún usuario
-    EXPIRED     // Expiró el tiempo límite (90s)
+    PENDING,
+    COMPLETED,
+    CANCELLED,
+    EXPIRED
 }
