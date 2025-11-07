@@ -70,7 +70,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.runtime.saveable)
 
-    // Firebase (BOM primero, luego las dependencias)
+    // Firebase (BOM first, then dependencies)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.database)
@@ -86,7 +86,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.play.services)
 
     // Networking
-    implementation(libs.retrofit.v2110)
+    implementation(libs.retrofit) // Use the consolidated 'retrofit' alias
     implementation(libs.converter.moshi)
     implementation(libs.moshi.kotlin)
     implementation(libs.okhttp)
