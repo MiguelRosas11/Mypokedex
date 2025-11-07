@@ -108,9 +108,29 @@ class ExchangeRepository(
                 return kotlin.Result.failure(Exception("Intercambio expirado"))
             }
 
-            // ✅ Pre-validación: asegúrate que ambas rutas existen ANTES de la transacción
-            ensureFavoriteExists(proposal.userAId, proposal.pokemonAId)
-            ensureFavoriteExists(userBId, pokemonBId)
+            // ✅ Verificar que ambos usuarios aún tengan los Pokémon seleccionados
+            val missingForUserA = !favoriteExists(proposal.userAId, proposal.pokemonAId)
+            val missingForUserB = !favoriteExists(userBId, pokemonBId)
+
+            if (missingForUserA || missingForUserB) {
+                // Cancela la propuesta para evitar que otro usuario siga intentando
+                exchangesRef.child(exchangeId)
+                    .child("status")
+                    .setValue(ExchangeStatus.CANCELLED.name)
+                    .await()
+
+                val otherAlias = proposal.userAAlias.ifBlank { "El otro entrenador" }
+                val message = when {
+                    missingForUserA && missingForUserB ->
+                        "El intercambio ya no es válido porque ninguno de los entrenadores conserva los Pokémon seleccionados."
+                    missingForUserA ->
+                        "$otherAlias ya no tiene a ${proposal.pokemonAName} en sus favoritos."
+                    else ->
+                        "Ya no tienes a $pokemonBName en tus favoritos."
+                }
+
+                return kotlin.Result.failure(IllegalStateException(message))
+            }
 
             // Transacción atómica
             executeAtomicExchange(
@@ -132,14 +152,9 @@ class ExchangeRepository(
         }
     }
 
-    /**
-     * Verifica que exista /favorites/{userId}/{pokemonId}
-     */
-    private suspend fun ensureFavoriteExists(userId: String, pokemonId: Int) {
+    private suspend fun favoriteExists(userId: String, pokemonId: Int): Boolean {
         val snap = favoritesRef.child(userId).child(pokemonId.toString()).get().await()
-        if (!snap.exists()) {
-            throw IllegalStateException("Favorite $pokemonId not found for $userId")
-        }
+        return snap.exists()
     }
 
     /**
