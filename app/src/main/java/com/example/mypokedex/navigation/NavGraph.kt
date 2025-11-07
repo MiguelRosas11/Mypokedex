@@ -264,8 +264,11 @@ fun AppNav() {
                         vm.createExchangeProposal(pokemon, userAlias)
                     },
                     onScanQR = { exchangeId ->
-                        // Navegar a la pantalla de aceptar intercambio con el ID escaneado
-                        nav.navigate(Dest.AcceptExchange.route(exchangeId))
+                        // 🔧 CAMBIO MÍNIMO: prepara datos y evita doble navegación
+                        vm.loadExchangeProposal(exchangeId)
+                        nav.navigate(Dest.AcceptExchange.route(exchangeId)) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
