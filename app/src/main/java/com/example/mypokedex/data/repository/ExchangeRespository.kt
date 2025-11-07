@@ -110,58 +110,53 @@ class ExchangeRepository(
         pokemonBName: String,
         pokemonBImageUrl: String
     ) = suspendCancellableCoroutine<Unit> { cont ->
+        // ⬇️ CAMBIO AQUÍ: usa la raíz, no exchangesRef
         val rootRef = firebaseDatabase.reference
+
         rootRef.runTransaction(object : Transaction.Handler {
             override fun doTransaction(current: MutableData): Transaction.Result {
-                return try {
-                    // RUTA CORRECTA: /users/{uid}/favorites
-                    val favA = current.child("users").child(userAId).child("favorites")
-                    val favB = current.child("users").child(userBId).child("favorites")
+                // tu mismo código interno
+                val favA = current.child("users").child(userAId).child("favorites")
+                val favB = current.child("users").child(userBId).child("favorites")
 
-                    val nodeA = favA.child(pokemonAId.toString())
-                    val nodeB = favB.child(pokemonBId.toString())
+                val nodeA = favA.child(pokemonAId.toString())
+                val nodeB = favB.child(pokemonBId.toString())
 
-                    val existsA = nodeA.value != null
-                    val existsB = nodeB.value != null
-                    if (!existsA || !existsB) {
-                        // No existe uno de los dos → aborta sin efectos
-                        return Transaction.abort()
-                    }
-
-                    // Elimina originales
-                    nodeA.value = null
-                    nodeB.value = null
-
-                    // Inserta cruzado
-                    val dataForA = mapOf(
-                        "id" to pokemonBId,
-                        "name" to pokemonBName,
-                        "imageUrl" to pokemonBImageUrl,
-                        "addedAt" to System.currentTimeMillis()
-                    )
-                    val dataForB = mapOf(
-                        "id" to pokemonAId,
-                        "name" to pokemonAName,
-                        "imageUrl" to pokemonAImageUrl,
-                        "addedAt" to System.currentTimeMillis()
-                    )
-                    favA.child(pokemonBId.toString()).value = dataForA
-                    favB.child(pokemonAId.toString()).value = dataForB
-
-                    // Marca COMPLETED (tu enum usa COMPLETED)
-                    val exNode = current.child("exchanges").child(exchangeId)
-                    exNode.child("userBId").value = userBId
-                    exNode.child("userBAlias").value = userBAlias
-                    exNode.child("pokemonBId").value = pokemonBId
-                    exNode.child("pokemonBName").value = pokemonBName
-                    exNode.child("pokemonBImageUrl").value = pokemonBImageUrl
-                    exNode.child("status").value = ExchangeStatus.COMPLETED.name
-                    exNode.child("completedAt").value = System.currentTimeMillis()
-
-                    Transaction.success(current)
-                } catch (_: Exception) {
-                    Transaction.abort()
+                val existsA = nodeA.value != null
+                val existsB = nodeB.value != null
+                if (!existsA || !existsB) {
+                    return Transaction.abort()
                 }
+
+                nodeA.value = null
+                nodeB.value = null
+
+                val dataForA = mapOf(
+                    "id" to pokemonBId,
+                    "name" to pokemonBName,
+                    "imageUrl" to pokemonBImageUrl,
+                    "addedAt" to System.currentTimeMillis()
+                )
+                val dataForB = mapOf(
+                    "id" to pokemonAId,
+                    "name" to pokemonAName,
+                    "imageUrl" to pokemonAImageUrl,
+                    "addedAt" to System.currentTimeMillis()
+                )
+
+                favA.child(pokemonBId.toString()).value = dataForA
+                favB.child(pokemonAId.toString()).value = dataForB
+
+                val exNode = current.child("exchanges").child(exchangeId)
+                exNode.child("userBId").value = userBId
+                exNode.child("userBAlias").value = userBAlias
+                exNode.child("pokemonBId").value = pokemonBId
+                exNode.child("pokemonBName").value = pokemonBName
+                exNode.child("pokemonBImageUrl").value = pokemonBImageUrl
+                exNode.child("status").value = ExchangeStatus.COMPLETED.name
+                exNode.child("completedAt").value = System.currentTimeMillis()
+
+                return Transaction.success(current)
             }
 
             override fun onComplete(
