@@ -14,7 +14,7 @@ object QRCodeGenerator {
      * @param content Contenido del QR (exchange ID)
      * @param size Tamaño en píxeles (default: 512)
      */
-    fun generateQRCode(content: String, size: Int = 512): Bitmap {
+    fun generateQRCode(content: String, size: Int = 512, i: Int): Bitmap {
         val writer = QRCodeWriter()
         val bitMatrix = writer.encode(content, BarcodeFormat.QR_CODE, size, size)
 

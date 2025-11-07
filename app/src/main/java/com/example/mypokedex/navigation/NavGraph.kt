@@ -1,5 +1,6 @@
 package com.example.mypokedex.navigation
 
+import android.widget.Toast
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
@@ -60,10 +61,12 @@ fun AppNav() {
         networkMonitor = networkMonitor
     )
 
+    // !! CORREGIDO: Inicializar repositorios en el orden correcto
     val userRepo = remember { UserRepository() }
-    val authRepo = remember { AuthRepository(userRepo) }
+    val authRepo = remember { AuthRepository(userRepo) } // userRepo se inyecta en authRepo
     val favoritesRepo = remember { FavoritesRepository() }
-    val exchangeRepo = remember { ExchangeRepository(FirebaseDatabase.getInstance()) }
+    // !! CORREGIDO: Inyectar favoritesRepo en exchangeRepo
+    val exchangeRepo = remember { ExchangeRepository(FirebaseDatabase.getInstance(), favoritesRepo) }
 
     // Estado de autenticación
     val currentUser by authRepo.currentUser.collectAsState(initial = null)
@@ -87,13 +90,13 @@ fun AppNav() {
                             pendingAction = null
                         }
                         is Resource.Error -> {
-                            // Error se muestra en el modal
+                            Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
             },
             onAuthError = { error ->
-                // Manejar error si es necesario
+                Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -216,7 +219,7 @@ fun AppNav() {
             }
         }
 
-        // Pantalla de intercambio
+        // Pantalla de intercambio (Usuario B - Oferente)
         composable(Dest.Exchange.route) {
             if (currentUser == null) {
                 LaunchedEffect(Unit) {
@@ -235,7 +238,6 @@ fun AppNav() {
                 val uiState by vm.state.collectAsState()
                 val userId = currentUser!!.uid
 
-                // Obtener alias del usuario
                 var userAlias by remember { mutableStateOf(userId.take(6).uppercase()) }
                 LaunchedEffect(userId) {
                     val alias = authRepo.getCurrentUserAlias()
@@ -244,7 +246,21 @@ fun AppNav() {
                     }
                 }
 
-                // Mostrar QR Dialog si existe
+                LaunchedEffect(Unit) {
+                    vm.event.collect { event ->
+                        when (event) {
+                            is ExchangeEvent.ExchangeCompleted -> {
+                                Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+                                nav.popBackStack()
+                            }
+                            is ExchangeEvent.ExchangeFailed -> {
+                                Toast.makeText(context, event.error, Toast.LENGTH_SHORT).show()
+                                // No saques al usuario, el VM resetea el QR
+                            }
+                        }
+                    }
+                }
+
                 if (uiState.currentExchangeId != null && uiState.qrCodeBitmap != null) {
                     QRExchangeDialog(
                         qrBitmap = uiState.qrCodeBitmap,
@@ -264,17 +280,13 @@ fun AppNav() {
                         vm.createExchangeProposal(pokemon, userAlias)
                     },
                     onScanQR = { exchangeId ->
-                        // 🔧 CAMBIO MÍNIMO: prepara datos y evita doble navegación
-                        vm.loadExchangeProposal(exchangeId)
-                        nav.navigate(Dest.AcceptExchange.route(exchangeId)) {
-                            launchSingleTop = true
-                        }
+                        nav.navigate(Dest.AcceptExchange.route(exchangeId))
                     }
                 )
             }
         }
 
-        // Pantalla de aceptar intercambio
+        // Pantalla de aceptar intercambio (Usuario A - Aceptante)
         composable(
             Dest.AcceptExchange.route,
             arguments = listOf(navArgument("exchangeId") { type = NavType.StringType })
@@ -301,7 +313,6 @@ fun AppNav() {
                 val uiState by vm.state.collectAsState()
                 val userId = currentUser!!.uid
 
-                // Obtener alias del usuario
                 var userAlias by remember { mutableStateOf(userId.take(6).uppercase()) }
                 LaunchedEffect(userId) {
                     val alias = authRepo.getCurrentUserAlias()
@@ -310,18 +321,15 @@ fun AppNav() {
                     }
                 }
 
-                // Observar eventos de intercambio
                 LaunchedEffect(Unit) {
                     vm.event.collect { event ->
                         when (event) {
                             is ExchangeEvent.ExchangeCompleted -> {
-                                // Volver a la pantalla de favoritos tras completar
+                                Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
                                 nav.popBackStack(Dest.Favorites.route, inclusive = false)
                             }
                             is ExchangeEvent.ExchangeFailed -> {
-                                // Error ya manejado en el ViewModel
-                                // Opcionalmente volver atrás
-                                nav.popBackStack()
+                                // El error se muestra en el AlertDialog
                             }
                         }
                     }
@@ -338,10 +346,12 @@ fun AppNav() {
                     },
                     userFavorites = uiState.userFavorites,
                     isLoading = uiState.isLoading,
+                    error = uiState.exchangeError, // Pasa el error
                     onBack = { nav.popBackStack() },
                     onAccept = { pokemon ->
                         vm.acceptExchange(exchangeId, userAlias, pokemon)
-                    }
+                    },
+                    onErrorDismiss = { vm.clearError() } // Limpia el error
                 )
             }
         }

@@ -3,54 +3,88 @@ package com.example.mypokedex.ui.exchange
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mypokedex.data.repository.*
+import com.example.mypokedex.data.repository.AuthRepository
+import com.example.mypokedex.data.repository.ExchangeProposal
+import com.example.mypokedex.data.repository.ExchangeRepository
+import com.example.mypokedex.data.repository.FavoritePokemon
+import com.example.mypokedex.data.repository.FavoritesRepository
+import com.example.mypokedex.data.repository.ExchangeStatus
 import com.example.mypokedex.util.QRCodeGenerator
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+sealed class ExchangeEvent {
+    data class ExchangeCompleted(val message: String) : ExchangeEvent()
+    data class ExchangeFailed(val error: String) : ExchangeEvent()
+}
+
+data class ExchangeState(
+    val userFavorites: List<FavoritePokemon> = emptyList(),
+    val isLoading: Boolean = false,
+    val selectedPokemon: FavoritePokemon? = null,
+    val qrCodeBitmap: Bitmap? = null,
+    val currentExchangeId: String? = null,
+    val proposalToAccept: ExchangeProposal? = null,
+    val exchangeError: String? = null
+)
+
 class ExchangeViewModel(
-    private val authRepository: AuthRepository,
-    private val favoritesRepository: FavoritesRepository,
-    private val exchangeRepository: ExchangeRepository
+    private val authRepo: AuthRepository,
+    private val favoritesRepo: FavoritesRepository,
+    private val exchangeRepo: ExchangeRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ExchangeState())
     val state: StateFlow<ExchangeState> = _state.asStateFlow()
 
-    private val _event = MutableSharedFlow<ExchangeEvent>()
-    val event: SharedFlow<ExchangeEvent> = _event.asSharedFlow()
+    private val _event = Channel<ExchangeEvent>()
+    val event = _event.receiveAsFlow()
 
     init {
         loadUserFavorites()
     }
 
-    /**
-     * Cargar favoritos del usuario actual
-     */
     private fun loadUserFavorites() {
-        val userId = authRepository.getCurrentUserId() ?: return
-
         viewModelScope.launch {
-            favoritesRepository.getUserFavorites(userId)
-                .catch { e ->
-                    _state.update { it.copy(error = e.localizedMessage) }
+            _state.update { it.copy(isLoading = true) }
+            val userId = authRepo.getCurrentUserId()
+            if (userId != null) {
+                // !! CORREGIDO: Usar el nombre de función correcto
+                favoritesRepo.getUserFavorites(userId)
+                    .catch { e ->
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                exchangeError = e.message ?: "Error al cargar favoritos"
+                            )
+                        }
+                    }
+                    .collect { favorites ->
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                userFavorites = favorites
+                            )
+                        }
+                    }
+            } else {
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        exchangeError = "Usuario no autenticado"
+                    )
                 }
-                .collect { favorites ->
-                    _state.update { it.copy(userFavorites = favorites) }
-                }
+            }
         }
     }
 
-    /**
-     * Crear propuesta de intercambio
-     */
     fun createExchangeProposal(pokemon: FavoritePokemon, userAlias: String) {
-        val userId = authRepository.getCurrentUserId() ?: return
-
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
+            _state.update { it.copy(isLoading = true, selectedPokemon = pokemon) }
+            val userId = authRepo.getCurrentUserId() ?: return@launch
 
-            val result = exchangeRepository.createExchangeProposal(
+            val result = exchangeRepo.createExchangeProposal(
                 userAId = userId,
                 userAAlias = userAlias,
                 pokemonAId = pokemon.id,
@@ -60,26 +94,22 @@ class ExchangeViewModel(
 
             result.fold(
                 onSuccess = { exchangeId ->
-                    // Generar QR Code
-                    val qrBitmap = QRCodeGenerator.generateQRCode(exchangeId)
-
+                    // !! CORREGIDO: Usar el nombre de función correcto
+                    val bitmap = QRCodeGenerator.generateQRCode(exchangeId, 300, 300)
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            currentExchangeId = exchangeId,
-                            qrCodeBitmap = qrBitmap,
-                            selectedPokemon = pokemon
+                            qrCodeBitmap = bitmap,
+                            currentExchangeId = exchangeId
                         )
                     }
-
-                    // Observar cambios en el intercambio
-                    observeExchange(exchangeId)
+                    listenForExchangeUpdates(exchangeId)
                 },
-                onFailure = { e ->
+                onFailure = { error ->
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            error = e.localizedMessage
+                            exchangeError = error.message ?: "Error al crear propuesta"
                         )
                     }
                 }
@@ -87,130 +117,135 @@ class ExchangeViewModel(
         }
     }
 
-    /**
-     * Observar cambios en un intercambio
-     */
-    private fun observeExchange(exchangeId: String) {
-        viewModelScope.launch {
-            exchangeRepository.observeExchangeProposal(exchangeId)
-                .collect { proposal ->
-                    if (proposal?.status == ExchangeStatus.COMPLETED) {
-                        _event.emit(ExchangeEvent.ExchangeCompleted)
-                        _state.update {
-                            it.copy(
-                                currentExchangeId = null,
-                                qrCodeBitmap = null,
-                                selectedPokemon = null
-                            )
-                        }
-                    }
-                }
-        }
-    }
-
-    /**
-     * Aceptar propuesta de intercambio
-     */
-    fun acceptExchange(
-        exchangeId: String,
-        userAlias: String,
-        selectedPokemon: FavoritePokemon
-    ) {
-        val userId = authRepository.getCurrentUserId() ?: return
-
+    fun loadExchangeProposal(exchangeId: String) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
-
-            val result = exchangeRepository.acceptExchange(
-                exchangeId = exchangeId,
-                userBId = userId,
-                userBAlias = userAlias,
-                pokemonBId = selectedPokemon.id,
-                pokemonBName = selectedPokemon.name,
-                pokemonBImageUrl = selectedPokemon.imageUrl
-            )
-
-            result.fold(
-                onSuccess = {
-                    _event.emit(ExchangeEvent.ExchangeCompleted)
-                    _state.update { it.copy(isLoading = false) }
-                },
-                onFailure = { e ->
+            val proposal = exchangeRepo.getExchangeProposal(exchangeId)
+            if (proposal != null) {
+                if (proposal.status == ExchangeStatus.EXPIRED || proposal.status == ExchangeStatus.CANCELLED) {
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            error = e.localizedMessage
+                            exchangeError = "Este intercambio ya ha expirado o fue cancelado."
                         )
                     }
-                    _event.emit(ExchangeEvent.ExchangeFailed(e.localizedMessage ?: "Error"))
+                } else {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            proposalToAccept = proposal
+                        )
+                    }
+                }
+            } else {
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        exchangeError = "Propuesta de intercambio no encontrada o inválida."
+                    )
+                }
+            }
+        }
+    }
+
+    fun acceptExchange(exchangeId: String, userBAlias: String, pokemon: FavoritePokemon) {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+            val userId = authRepo.getCurrentUserId() ?: return@launch
+
+            runCatching {
+                exchangeRepo.acceptExchange(
+                    exchangeId = exchangeId,
+                    userBId = userId,
+                    userBAlias = userBAlias,
+                    pokemonBId = pokemon.id,
+                    pokemonBName = pokemon.name,
+                    pokemonBImageUrl = pokemon.imageUrl
+                )
+            }.fold(
+                onSuccess = { result ->
+                    result.fold(
+                        onSuccess = {
+                            _state.update { it.copy(isLoading = false) }
+                            _event.send(ExchangeEvent.ExchangeCompleted("¡Intercambio exitoso!"))
+                        },
+                        onFailure = { error ->
+                            _state.update {
+                                it.copy(
+                                    isLoading = false,
+                                    exchangeError = error.message ?: "Error al aceptar el intercambio"
+                                )
+                            }
+                        }
+                    )
+                },
+                onFailure = { error ->
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            exchangeError = error.message ?: "Error al aceptar el intercambio"
+                        )
+                    }
                 }
             )
         }
     }
 
-    /**
-     * Cancelar intercambio
-     */
-    fun cancelExchange() {
-        val exchangeId = _state.value.currentExchangeId ?: return
-
+    private fun listenForExchangeUpdates(exchangeId: String) {
         viewModelScope.launch {
-            exchangeRepository.cancelExchange(exchangeId)
+            exchangeRepo.observeExchangeProposal(exchangeId).collect { proposal ->
+                when (proposal?.status) {
+                    ExchangeStatus.COMPLETED -> {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                qrCodeBitmap = null,
+                                currentExchangeId = null
+                            )
+                        }
+                        _event.send(ExchangeEvent.ExchangeCompleted("¡Intercambio completado!"))
+                    }
+                    ExchangeStatus.CANCELLED -> {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                qrCodeBitmap = null,
+                                currentExchangeId = null
+                            )
+                        }
+                        _event.send(ExchangeEvent.ExchangeFailed("El intercambio fue cancelado."))
+                    }
+                    ExchangeStatus.EXPIRED -> {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                qrCodeBitmap = null,
+                                currentExchangeId = null
+                            )
+                        }
+                        _event.send(ExchangeEvent.ExchangeFailed("El tiempo ha expirado."))
+                    }
+                    else -> { /* Sigue en PENDING */ }
+                }
+            }
+        }
+    }
+
+    fun cancelExchange() {
+        viewModelScope.launch {
+            val exchangeId = _state.value.currentExchangeId ?: return@launch
+            exchangeRepo.cancelExchange(exchangeId)
             _state.update {
                 it.copy(
-                    currentExchangeId = null,
                     qrCodeBitmap = null,
+                    currentExchangeId = null,
                     selectedPokemon = null
                 )
             }
         }
     }
 
-    /**
-     * Obtener propuesta de intercambio para aceptar
-     */
-    fun loadExchangeProposal(exchangeId: String) {
-        viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
-
-            val proposal = exchangeRepository.getExchangeProposal(exchangeId)
-
-            if (proposal != null) {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        proposalToAccept = proposal
-                    )
-                }
-            } else {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        error = "Propuesta no encontrada"
-                    )
-                }
-            }
-        }
+    fun clearError() {
+        _state.update { it.copy(exchangeError = null) }
     }
-}
-
-/**
- * Estado del sistema de intercambio
- */
-data class ExchangeState(
-    val isLoading: Boolean = false,
-    val error: String? = null,
-    val userFavorites: List<FavoritePokemon> = emptyList(),
-    val currentExchangeId: String? = null,
-    val qrCodeBitmap: Bitmap? = null,
-    val selectedPokemon: FavoritePokemon? = null,
-    val proposalToAccept: ExchangeProposal? = null
-)
-
-/**
- * Eventos del sistema de intercambio
- */
-sealed class ExchangeEvent {
-    object ExchangeCompleted : ExchangeEvent()
-    data class ExchangeFailed(val message: String) : ExchangeEvent()
 }

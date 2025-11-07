@@ -9,11 +9,10 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-/**
- * Repository para gestionar intercambios de Pokémon
- */
 class ExchangeRepository(
-    private val firebaseDatabase: FirebaseDatabase = FirebaseDatabase.getInstance()
+    private val firebaseDatabase: FirebaseDatabase = FirebaseDatabase.getInstance(),
+    // Se inyecta (desde NavGraph)
+    private val favoritesRepository: FavoritesRepository
 ) {
     private val exchangesRef = firebaseDatabase.getReference("exchanges")
     private val favoritesRef = firebaseDatabase.getReference("favorites")
@@ -106,14 +105,32 @@ class ExchangeRepository(
             }
 
             val now = System.currentTimeMillis()
-            if (now - proposal.createdAt > 90_000) {
+            if (now - proposal.createdAt > 90_000) { // Timeout de 90 segundos
                 exchangesRef.child(exchangeId)
                     .child("status")
                     .setValue(ExchangeStatus.EXPIRED.name)
                     .await()
-                return kotlin.Result.failure(Exception("Intercambio expirado"))
+                return kotlin.Result.failure(Exception("Intercambio expirado (90s)"))
             }
 
+            if (proposal.userAId == userBId) {
+                return kotlin.Result.failure(Exception("No puedes intercambiar contigo mismo."))
+            }
+
+            // !! Verificación de pre-transacción !!
+            val userAHasPokemon = favoritesRepository.isFavorite(proposal.userAId, proposal.pokemonAId)
+            if (!userAHasPokemon) {
+                exchangesRef.child(exchangeId).child("status").setValue(ExchangeStatus.CANCELLED.name).await()
+                return kotlin.Result.failure(Exception("Error: ${proposal.userAAlias} ya no tiene a ${proposal.pokemonAName}."))
+            }
+
+            val userBHasPokemon = favoritesRepository.isFavorite(userBId, pokemonBId)
+            if (!userBHasPokemon) {
+                // No es necesario cancelar, User B puede re-intentar
+                return kotlin.Result.failure(Exception("Error: No tienes a $pokemonBName en tus favoritos."))
+            }
+
+            // Si todo está bien, ejecutar la transacción atómica
             executeAtomicExchange(
                 exchangeId = exchangeId,
                 userAId = proposal.userAId,
@@ -159,17 +176,18 @@ class ExchangeRepository(
                             .child(userBId)
                             .child(pokemonBId.toString())
 
+                        // Doble verificación: si no existen, abortar.
                         if (pokemonAData.value == null || pokemonBData.value == null) {
                             return Transaction.abort()
                         }
 
+                        // !! INICIO DE CORRECCIÓN !!
                         // Eliminar Pokémon de dueños originales
-                        currentData.child("favorites").child(userAId)
-                            .child(pokemonAId.toString()).value = null
-                        currentData.child("favorites").child(userBId)
-                            .child(pokemonBId.toString()).value = null
+                        pokemonAData.value = null
+                        pokemonBData.value = null
 
-                        // Agregar Pokémon a nuevos dueños
+                        // Agregar Pokémon a nuevos dueños usando la lógica
+                        // original de 'mapOf' (que era la correcta)
                         currentData.child("favorites").child(userAId)
                             .child(pokemonBId.toString()).value = mapOf(
                             "id" to pokemonBId,
@@ -184,6 +202,7 @@ class ExchangeRepository(
                             "imageUrl" to pokemonAImageUrl,
                             "addedAt" to System.currentTimeMillis()
                         )
+                        // !! FIN DE CORRECCIÓN !!
 
                         // Actualizar estado del intercambio
                         val exchPath = currentData.child("exchanges").child(exchangeId)
@@ -209,6 +228,7 @@ class ExchangeRepository(
                     if (error != null) {
                         cont.resumeWithException(error.toException())
                     } else if (!committed) {
+                        // Esto es lo que causaba el "Transaction aborted"
                         cont.resumeWithException(Exception("Transaction aborted"))
                     } else {
                         cont.resume(Unit)
