@@ -23,7 +23,7 @@ object NetworkModule {
         .build()
 
     private val moshi = Moshi.Builder()
-        .add(KotlinJsonAdapterFactory()) // ✅ necesario para clases Kotlin con Moshi
+        .add(KotlinJsonAdapterFactory()) //  necesario para clases Kotlin con Moshi
         .build()
 
     private val retrofit: Retrofit = Retrofit.Builder()

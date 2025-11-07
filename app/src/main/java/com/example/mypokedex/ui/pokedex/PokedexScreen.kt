@@ -7,8 +7,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SignalWifiOff
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +30,9 @@ fun PokedexScreen(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     onRefresh: () -> Unit,
-    onOpen: (Int) -> Unit
+    onOpen: (Int) -> Unit,
+    onOpenFavorites: () -> Unit = {},
+    onOpenExchange: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -45,6 +46,23 @@ fun PokedexScreen(
                             contentDescription = "Sin conexión",
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+
+                    // Botón de favoritos
+                    IconButton(onClick = onOpenFavorites) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = "Favoritos",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    // Botón de intercambio
+                    IconButton(onClick = onOpenExchange) {
+                        Icon(
+                            imageVector = Icons.Default.SwapHoriz,
+                            contentDescription = "Intercambio"
                         )
                     }
 
@@ -92,7 +110,10 @@ fun PokedexScreen(
                     onValueChange = onSearch,
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    placeholder = { Text("Buscar Pokémon...") }
+                    placeholder = { Text("Buscar Pokémon...") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                    }
                 )
 
                 // Botón para cambiar tipo de orden (ID/Nombre)
@@ -101,8 +122,11 @@ fun PokedexScreen(
                 }
 
                 // Botón para cambiar dirección (ASC/DESC)
-                TextButton(onClick = onToggleSortDirection) {
-                    Text("↕")
+                IconButton(onClick = onToggleSortDirection) {
+                    Icon(
+                        imageVector = Icons.Default.SwapVert,
+                        contentDescription = "Cambiar orden"
+                    )
                 }
             }
 
@@ -163,7 +187,14 @@ private fun PokemonCard(p: Pokemon, onClick: () -> Unit) {
                 modifier = Modifier.size(96.dp)
             )
             Spacer(Modifier.height(8.dp))
-            Text("#${p.id}  ${p.name}", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "#${p.id.toString().padStart(3, '0')}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                p.name.replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }
