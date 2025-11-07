@@ -1,3 +1,39 @@
 <resources>
     <string name="app_name">Mypokedex</string>
+
+    <!-- Auth -->
+    <string name="auth_title">Inicio Rápido</string>
+    <string name="auth_subtitle">Ingresa un alias para comenzar</string>
+    <string name="auth_alias_label">Alias (3-8 caracteres)</string>
+    <string name="auth_start_button">INICIAR</string>
+
+    <!-- Favorites -->
+    <string name="favorites_title">Mis Favoritos</string>
+    <string name="favorites_empty">No tienes favoritos aún</string>
+    <string name="favorites_empty_hint">Agrega Pokémon desde la pantalla de detalle</string>
+
+    <!-- Exchange -->
+    <string name="exchange_title">Intercambio</string>
+    <string name="exchange_select_pokemon">Selecciona un Pokémon para intercambiar</string>
+    <string name="exchange_scan_qr">Escanear QR</string>
+    <string name="exchange_waiting">Esperando al otro usuario...</string>
+    <string name="exchange_success">¡Intercambio exitoso!</string>
+    <string name="exchange_failed">Error en el intercambio</string>
+    <string name="exchange_expired">El intercambio ha expirado</string>
+    <string name="exchange_time_left">Tiempo restante: %1$ds</string>
+
+    <!-- Detail -->
+    <string name="detail_weight">Peso</string>
+    <string name="detail_height">Altura</string>
+    <string name="detail_stats">Estadísticas</string>
+
+    <!-- General -->
+    <string name="cancel">Cancelar</string>
+    <string name="accept">Aceptar</string>
+    <string name="close">Cerrar</string>
+    <string name="retry">Reintentar</string>
+    <string name="loading">Cargando...</string>
+    <string name="error">Error</string>
+    <string name="no_connection">Sin conexión</string>
+    <string name="no_connection_message">Sin conexión - Mostrando datos guardados</string>
 </resources>

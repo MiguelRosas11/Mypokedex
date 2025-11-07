@@ -18,17 +18,23 @@ import com.example.mypokedex.data.repository.*
 import com.example.mypokedex.ui.auth.AuthModal
 import com.example.mypokedex.ui.detail.DetailScreen
 import com.example.mypokedex.ui.detail.DetailViewModel
+import com.example.mypokedex.ui.exchange.AcceptExchangeScreen
+import com.example.mypokedex.ui.exchange.ExchangeEvent
 import com.example.mypokedex.ui.pokedex.PokedexScreen
 import com.example.mypokedex.ui.pokedex.PokedexViewModel
 import com.example.mypokedex.ui.exchange.ExchangeScreen
 import com.example.mypokedex.ui.exchange.ExchangeViewModel
+import com.example.mypokedex.ui.exchange.QRExchangeDialog
+import com.example.mypokedex.ui.favorites.FavoritesScreen
+import com.example.mypokedex.ui.favorites.FavoritesViewModel
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.launch
 
-
 sealed class Dest(val route: String) {
     data object Pokedex : Dest("pokedex")
-    data object Detail : Dest("detail/{id}") { fun route(id: Int) = "detail/$id" }
+    data object Detail : Dest("detail/{id}") {
+        fun route(id: Int) = "detail/$id"
+    }
     data object Favorites : Dest("favorites")
     data object Exchange : Dest("exchange")
     data object AcceptExchange : Dest("exchange/accept/{exchangeId}") {
@@ -56,11 +62,7 @@ fun AppNav() {
 
     val authRepo = remember { AuthRepository() }
     val favoritesRepo = remember { FavoritesRepository() }
-    // ¡CAMBIO CLAVE AQUÍ!
-    // Instancia la clase de implementación concreta, pasándole la dependencia que necesita (FirebaseDatabase)
-    val exchangeRepo: ExchangeRepository = remember {
-        ExchangeRepository(FirebaseDatabase.getInstance())
-    }
+    val exchangeRepo = remember { ExchangeRepository(FirebaseDatabase.getInstance()) }
 
     // Estado de autenticación
     val currentUser by authRepo.currentUser.collectAsState(initial = null)
@@ -78,19 +80,19 @@ fun AppNav() {
                 scope.launch {
                     val result = authRepo.signInWithAlias(alias)
                     when (result) {
-                        is com.example.mypokedex.data.repository.Resource.Success -> {
+                        is Resource.Success -> {
                             showAuthModal = false
                             pendingAction?.invoke()
                             pendingAction = null
                         }
-                        is com.example.mypokedex.data.repository.Resource.Error -> {
-                            // Mostrar error
+                        is Resource.Error -> {
+                            // Error se muestra en el modal
                         }
                     }
                 }
             },
             onAuthError = { error ->
-                // Manejar error
+                // Manejar error si es necesario
             }
         )
     }
@@ -110,10 +112,13 @@ fun AppNav() {
     NavHost(navController = nav, startDestination = Dest.Pokedex.route) {
         // Pantalla principal Pokedex
         composable(Dest.Pokedex.route) {
-            val vm: PokedexViewModel = viewModel(factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(c: Class<T>): T = PokedexViewModel(pokemonRepo) as T
-            })
+            val vm: PokedexViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(c: Class<T>): T =
+                        PokedexViewModel(pokemonRepo) as T
+                }
+            )
             val uiState by vm.state.collectAsState()
             val isConnected by vm.isConnected.collectAsState()
 
@@ -139,64 +144,113 @@ fun AppNav() {
                 }
             )
         }
+        //pantalla de aceptar intercambio
+
+
+
+
+
+
+
 
         // Pantalla de detalle
         composable(
             Dest.Detail.route,
             arguments = listOf(navArgument("id") { type = NavType.IntType })
-        ) { back ->
-            val id = back.arguments!!.getInt("id").toString()
-            val vm: DetailViewModel = viewModel(factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(c: Class<T>): T =
-                    //  repositorios necesarios
-                    DetailViewModel(pokemonRepo, authRepo, favoritesRepo) as T
-            })
-            LaunchedEffect(id) { vm.load(id) }
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments!!.getInt("id").toString()
+            val vm: DetailViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(c: Class<T>): T =
+                        DetailViewModel(pokemonRepo, authRepo, favoritesRepo) as T
+                }
+            )
+
+            LaunchedEffect(id) {
+                vm.load(id)
+            }
+
             val uiState by vm.state.collectAsState()
+            val isFavorite by vm.isFavorite.collectAsState()
 
             DetailScreen(
                 state = uiState,
+                isFavorite = isFavorite,
                 onBack = { nav.popBackStack() },
-                onToggleFavorite = { pokemonId, name, imageUrl ->
-                    // La UI solo notifica al ViewModel
+                onToggleFavorite = {
                     requireAuth {
-                        vm.onToggleFavorite(pokemonId, name, imageUrl)
+                        val pokemon = uiState.pokemon
+                        if (pokemon != null) {
+                            vm.onToggleFavorite(pokemon.id, pokemon.name, pokemon.imageUrl)
+                        }
                     }
                 }
             )
         }
 
-
-        //composable de ejemplo para favoritos
+        // Pantalla de favoritos
         composable(Dest.Favorites.route) {
-            // Aquí llamar a tu FavoritesScreen, por ahora un placeholder:
-            // Por ejemplo: FavoritesScreen(navController = nav)
-            // Text("Pantalla de Favoritos")
+            if (currentUser == null) {
+                LaunchedEffect(Unit) {
+                    nav.popBackStack()
+                    showAuthModal = true
+                }
+            } else {
+                val vm: FavoritesViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(c: Class<T>): T =
+                            FavoritesViewModel(authRepo, favoritesRepo) as T
+                    }
+                )
+
+                val state by vm.state.collectAsState()
+
+                FavoritesScreen(
+                    favorites = state.favorites,
+                    isLoading = state.isLoading,
+                    onBack = { nav.popBackStack() },
+                    onPokemonClick = { pokemonId ->
+                        nav.navigate(Dest.Detail.route(pokemonId))
+                    },
+                    onRemoveFavorite = { pokemonId ->
+                        vm.removeFavorite(pokemonId)
+                    }
+                )
+            }
         }
-
-
 
         // Pantalla de intercambio
         composable(Dest.Exchange.route) {
             if (currentUser == null) {
-                // Mostrar modal de auth
                 LaunchedEffect(Unit) {
+                    nav.popBackStack()
                     showAuthModal = true
                 }
             } else {
-                val vm: ExchangeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : ViewModel> create(c: Class<T>): T =
-                        ExchangeViewModel(authRepo, favoritesRepo, exchangeRepo) as T
-                })
+                val vm: ExchangeViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(c: Class<T>): T =
+                            ExchangeViewModel(authRepo, favoritesRepo, exchangeRepo) as T
+                    }
+                )
 
                 val uiState by vm.state.collectAsState()
                 val userId = currentUser!!.uid
-
-                // Aquí necesitarías obtener el alias del usuario
-                // Por simplicidad, usamos los primeros 6 chars del UID
                 val userAlias = userId.take(6).uppercase()
+
+                // Mostrar QR Dialog si existe
+                if (uiState.currentExchangeId != null && uiState.qrCodeBitmap != null) {
+                    QRExchangeDialog(
+                        qrBitmap = uiState.qrCodeBitmap,
+                        exchangeId = uiState.currentExchangeId!!,
+                        pokemonName = uiState.selectedPokemon?.name ?: "",
+                        onDismiss = { vm.cancelExchange() },
+                        onTimeout = { vm.cancelExchange() }
+                    )
+                }
 
                 ExchangeScreen(
                     favorites = uiState.userFavorites,
@@ -207,11 +261,73 @@ fun AppNav() {
                         vm.createExchangeProposal(pokemon, userAlias)
                     },
                     onScanQR = {
-                        // Implementar escaneo de QR
-                        // Por ahora, navegar a pantalla de aceptación
+                        // Implementar escaneo de QR en futuro
                     }
                 )
             }
         }
+        //pantalla de aceptar intercambio
+        composable(
+            Dest.AcceptExchange.route,
+            arguments = listOf(navArgument("exchangeId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val exchangeId = backStackEntry.arguments?.getString("exchangeId")
+
+            if (currentUser == null || exchangeId == null) {
+                LaunchedEffect(Unit) {
+                    nav.popBackStack()
+                }
+            } else {
+                val vm: ExchangeViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(c: Class<T>): T =
+                            ExchangeViewModel(authRepo, favoritesRepo, exchangeRepo) as T
+                    }
+                )
+
+                LaunchedEffect(exchangeId) {
+                    vm.loadExchangeProposal(exchangeId)
+                }
+
+                val uiState by vm.state.collectAsState()
+                val userId = currentUser!!.uid
+                val userAlias = userId.take(6).uppercase()
+
+                // Observar eventos de intercambio
+                LaunchedEffect(Unit) {
+                    vm.event.collect { event ->
+                        when (event) {
+                            is ExchangeEvent.ExchangeCompleted -> {
+                                // Mostrar mensaje de éxito y volver
+                                nav.popBackStack()
+                            }
+
+                            is ExchangeEvent.ExchangeFailed -> {
+                                // Error ya manejado en el ViewModel
+                            }
+                        }
+                    }
+                }
+
+                AcceptExchangeScreen(
+                    proposalPokemon = uiState.proposalToAccept?.let { proposal ->
+                        FavoritePokemon(
+                            id = proposal.pokemonAId,
+                            name = proposal.pokemonAName,
+                            imageUrl = proposal.pokemonAImageUrl,
+                            addedAt = proposal.createdAt
+                        )
+                    },
+                    userFavorites = uiState.userFavorites,
+                    isLoading = uiState.isLoading,
+                    onBack = { nav.popBackStack() },
+                    onAccept = { pokemon ->
+                        vm.acceptExchange(exchangeId, userAlias, pokemon)
+                    }
+                )
+            }
+        }
+
     }
 }
