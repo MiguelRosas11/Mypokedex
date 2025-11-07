@@ -5,88 +5,61 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.Result
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlinx.coroutines.suspendCancellableCoroutine
 
 class ExchangeRepository(
     private val firebaseDatabase: FirebaseDatabase = FirebaseDatabase.getInstance(),
-    private val favoritesRepository: FavoritesRepository
+    private val favoritesRepository: FavoritesRepository // puedes no usarlo aquí
 ) {
     private val exchangesRef = firebaseDatabase.getReference("exchanges")
-    private val favoritesRef = firebaseDatabase.getReference("favorites")
+    // IMPORTANTE: asegúrate que tus favoritos realmente vivan en /favorites/{uid}/{pokeId}
+    // Si los guardas en /users/{uid}/favorites/{pokeId}, cambia el acceso en executeAtomicExchange.
+    private val favoritesRootPath = "favorites"
 
-    /**
-     * Crear propuesta de intercambio
-     */
+    // ---------- Crear propuesta ----------
     suspend fun createExchangeProposal(
         userAId: String,
         userAAlias: String,
         pokemonAId: Int,
         pokemonAName: String,
         pokemonAImageUrl: String
-    ): kotlin.Result<String> {
-        return try {
-            val exchangeId = exchangesRef.push().key ?: return kotlin.Result.failure(
-                Exception("Error al generar ID")
-            )
-
-            val proposal = ExchangeProposal(
-                id = exchangeId,
-                userAId = userAId,
-                userAAlias = userAAlias,
-                pokemonAId = pokemonAId,
-                pokemonAName = pokemonAName,
-                pokemonAImageUrl = pokemonAImageUrl,
-                status = ExchangeStatus.PENDING,
-                createdAt = System.currentTimeMillis()
-            )
-
-            exchangesRef.child(exchangeId).setValue(proposal).await()
-
-            kotlin.Result.success(exchangeId)
-        } catch (e: Exception) {
-            kotlin.Result.failure(e)
-        }
+    ): kotlin.Result<String> = runCatching {
+        val exchangeId = exchangesRef.push().key ?: error("No se pudo generar ID")
+        val proposal = ExchangeProposal(
+            id = exchangeId,
+            userAId = userAId,
+            userAAlias = userAAlias,
+            pokemonAId = pokemonAId,
+            pokemonAName = pokemonAName,
+            pokemonAImageUrl = pokemonAImageUrl,
+            status = ExchangeStatus.PENDING,
+            createdAt = System.currentTimeMillis()
+        )
+        exchangesRef.child(exchangeId).setValue(proposal).await()
+        exchangeId
     }
 
-    /**
-     * Obtener propuesta de intercambio
-     */
-    suspend fun getExchangeProposal(exchangeId: String): ExchangeProposal? {
-        return try {
-            val snapshot = exchangesRef.child(exchangeId).get().await()
-            snapshot.getValue(ExchangeProposal::class.java)
-        } catch (e: Exception) {
-            null
-        }
-    }
+    // ---------- Obtener propuesta ----------
+    suspend fun getExchangeProposal(exchangeId: String): ExchangeProposal? = runCatching {
+        exchangesRef.child(exchangeId).get().await().getValue(ExchangeProposal::class.java)
+    }.getOrNull()
 
-    /**
-     * Observar cambios en una propuesta de intercambio
-     */
+    // ---------- Observar propuesta ----------
     fun observeExchangeProposal(exchangeId: String): Flow<ExchangeProposal?> = callbackFlow {
-        val listener = object : ValueEventListener {
+        val l = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val proposal = snapshot.getValue(ExchangeProposal::class.java)
-                trySend(proposal)
+                trySend(snapshot.getValue(ExchangeProposal::class.java))
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                close(error.toException())
-            }
+            override fun onCancelled(error: DatabaseError) { close(error.toException()) }
         }
-
-        exchangesRef.child(exchangeId).addValueEventListener(listener)
-
-        awaitClose {
-            exchangesRef.child(exchangeId).removeEventListener(listener)
-        }
+        exchangesRef.child(exchangeId).addValueEventListener(l)
+        awaitClose { exchangesRef.child(exchangeId).removeEventListener(l) }
     }
 
-    /**
-     * Aceptar intercambio y ejecutar transacción
-     */
+    // ---------- Aceptar (transacción atómica) ----------
     suspend fun acceptExchange(
         exchangeId: String,
         userBId: String,
@@ -94,63 +67,38 @@ class ExchangeRepository(
         pokemonBId: Int,
         pokemonBName: String,
         pokemonBImageUrl: String
-    ): kotlin.Result<Unit> {
-        return try {
-            val proposal = getExchangeProposal(exchangeId)
-                ?: return kotlin.Result.failure(Exception("Propuesta no encontrada"))
+    ): kotlin.Result<Unit> = runCatching {
+        val proposal = getExchangeProposal(exchangeId) ?: error("Propuesta no encontrada")
 
-            if (proposal.status != ExchangeStatus.PENDING) {
-                return kotlin.Result.failure(Exception("Intercambio ya procesado"))
-            }
+        if (proposal.status != ExchangeStatus.PENDING) error("Intercambio ya procesado")
 
-            val now = System.currentTimeMillis()
-            if (now - proposal.createdAt > 90_000) {
-                exchangesRef.child(exchangeId)
-                    .child("status")
-                    .setValue(ExchangeStatus.EXPIRED.name)
-                    .await()
-                return kotlin.Result.failure(Exception("Intercambio expirado (90s)"))
-            }
-
-            if (proposal.userAId == userBId) {
-                return kotlin.Result.failure(Exception("No puedes intercambiar contigo mismo."))
-            }
-
-
-            // Ejecutar transacción atómica
-            return runCatching {
-                executeAtomicExchange(
-                    exchangeId = exchangeId,
-                    userAId = proposal.userAId,
-                    userBId = userBId,
-                    userBAlias = userBAlias,
-                    pokemonAId = proposal.pokemonAId,
-                    pokemonAName = proposal.pokemonAName,
-                    pokemonAImageUrl = proposal.pokemonAImageUrl,
-                    pokemonBId = pokemonBId,
-                    pokemonBName = pokemonBName,
-                    pokemonBImageUrl = pokemonBImageUrl
-                )
-            }.fold(
-                onSuccess = { kotlin.Result.success(Unit) },
-                onFailure = { e ->
-                    // Si la transacción abortó, reflejar CANCELLED para que el otro equipo lo vea
-                    exchangesRef.child(exchangeId).child("status")
-                        .setValue(ExchangeStatus.CANCELLED.name)
-                        .await()
-                    kotlin.Result.failure(e)
-                }
-            )
-        } catch (e: Exception) {
-            kotlin.Result.failure(e)
+        val now = System.currentTimeMillis()
+        if (now - proposal.createdAt > 90_000) {
+            exchangesRef.child(exchangeId).child("status").setValue(ExchangeStatus.EXPIRED.name).await()
+            error("Intercambio expirado (90s)")
         }
+        if (proposal.userAId == userBId) error("No puedes intercambiar contigo mismo.")
+
+        // Transacción: valida existencia y mueve ambos Pokémon sin estados intermedios
+        runAtomicExchange(
+            exchangeId = exchangeId,
+            userAId = proposal.userAId,
+            userBId = userBId,
+            userBAlias = userBAlias,
+            pokemonAId = proposal.pokemonAId,
+            pokemonAName = proposal.pokemonAName,
+            pokemonAImageUrl = proposal.pokemonAImageUrl,
+            pokemonBId = pokemonBId,
+            pokemonBName = pokemonBName,
+            pokemonBImageUrl = pokemonBImageUrl
+        )
+    }.onFailure { e ->
+        // Si aborta la transacción, marca CANCELLED para que ambos vean el resultado coherente
+        try { exchangesRef.child(exchangeId).child("status").setValue(ExchangeStatus.CANCELLED.name).await() } catch (_: Exception) {}
     }
 
-    /**
-     * !! FUNCIÓN CORREGIDA !!
-     * Ejecuta la transacción atómica de intercambio
-     */
-    private suspend fun executeAtomicExchange(
+    // ---------- Transacción en raíz ----------
+    private suspend fun runAtomicExchange(
         exchangeId: String,
         userAId: String,
         userBId: String,
@@ -161,102 +109,81 @@ class ExchangeRepository(
         pokemonBId: Int,
         pokemonBName: String,
         pokemonBImageUrl: String
-    ) {
-        suspendCancellableCoroutine<Unit> { cont ->
-            val ref = firebaseDatabase.reference
-            ref.runTransaction(object : Transaction.Handler {
-                override fun doTransaction(currentData: MutableData): Transaction.Result {
-                    try {
-                        // Obtener referencias a los Pokémon
-                        val favUserA = currentData.child("favorites").child(userAId)
-                        val favUserB = currentData.child("favorites").child(userBId)
+    ) = suspendCancellableCoroutine<Unit> { cont ->
+        val rootRef = firebaseDatabase.reference
+        rootRef.runTransaction(object : Transaction.Handler {
+            override fun doTransaction(current: MutableData): Transaction.Result {
+                try {
+                    val favRoot = current.child(favoritesRootPath)
+                    val favA = favRoot.child(userAId)
+                    val favB = favRoot.child(userBId)
 
-                        val pokemonAData = favUserA.child(pokemonAId.toString())
-                        val pokemonBData = favUserB.child(pokemonBId.toString())
+                    val nodeA = favA.child(pokemonAId.toString())
+                    val nodeB = favB.child(pokemonBId.toString())
 
-                        // !! VERIFICACIÓN CRÍTICA: Los Pokémon deben existir !!
-                        val pokemonAExists = pokemonAData.value != null
-                        val pokemonBExists = pokemonBData.value != null
+                    val existsA = nodeA.value != null
+                    val existsB = nodeB.value != null
+                    if (!existsA || !existsB) return Transaction.abort()
 
-                        if (!pokemonAExists || !pokemonBExists) {
-                            // Si alguno no existe, abortar la transacción
-                            return Transaction.abort()
-                        }
+                    // Elimina originales
+                    nodeA.value = null
+                    nodeB.value = null
 
-                        // PASO 1: Eliminar los Pokémon de sus dueños originales
-                        pokemonAData.value = null
-                        pokemonBData.value = null
+                    // Inserta cruzado
+                    val dataForA = mapOf(
+                        "id" to pokemonBId,
+                        "name" to pokemonBName,
+                        "imageUrl" to pokemonBImageUrl,
+                        "addedAt" to System.currentTimeMillis()
+                    )
+                    val dataForB = mapOf(
+                        "id" to pokemonAId,
+                        "name" to pokemonAName,
+                        "imageUrl" to pokemonAImageUrl,
+                        "addedAt" to System.currentTimeMillis()
+                    )
+                    favA.child(pokemonBId.toString()).value = dataForA
+                    favB.child(pokemonAId.toString()).value = dataForB
 
-                        // PASO 2: Crear los datos de los nuevos Pokémon
-                        val newPokemonBDataForUserA = mapOf(
-                            "id" to pokemonBId,
-                            "name" to pokemonBName,
-                            "imageUrl" to pokemonBImageUrl,
-                            "addedAt" to System.currentTimeMillis()
-                        )
+                    // Actualiza propuesta a COMPLETED (y guarda info del B que aceptó)
+                    val exNode = current.child("exchanges").child(exchangeId)
+                    exNode.child("userBId").value = userBId
+                    exNode.child("userBAlias").value = userBAlias
+                    exNode.child("pokemonBId").value = pokemonBId
+                    exNode.child("pokemonBName").value = pokemonBName
+                    exNode.child("pokemonBImageUrl").value = pokemonBImageUrl
+                    exNode.child("status").value = ExchangeStatus.COMPLETED.name
+                    exNode.child("completedAt").value = System.currentTimeMillis()
 
-                        val newPokemonADataForUserB = mapOf(
-                            "id" to pokemonAId,
-                            "name" to pokemonAName,
-                            "imageUrl" to pokemonAImageUrl,
-                            "addedAt" to System.currentTimeMillis()
-                        )
-
-                        // PASO 3: Asignar los Pokémon a sus nuevos dueños
-                        favUserA.child(pokemonBId.toString()).value = newPokemonBDataForUserA
-                        favUserB.child(pokemonAId.toString()).value = newPokemonADataForUserB
-
-                        // PASO 4: Actualizar el estado del intercambio
-                        val exchangeData = currentData.child("exchanges").child(exchangeId)
-                        exchangeData.child("userBId").value = userBId
-                        exchangeData.child("userBAlias").value = userBAlias
-                        exchangeData.child("pokemonBId").value = pokemonBId
-                        exchangeData.child("pokemonBName").value = pokemonBName
-                        exchangeData.child("pokemonBImageUrl").value = pokemonBImageUrl
-                        exchangeData.child("status").value = ExchangeStatus.COMPLETED.name
-                        exchangeData.child("completedAt").value = System.currentTimeMillis()
-
-                        return Transaction.success(currentData)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        return Transaction.abort()
-                    }
+                    return Transaction.success(current)
+                } catch (_: Exception) {
+                    return Transaction.abort()
                 }
+            }
 
-                override fun onComplete(
-                    error: DatabaseError?,
-                    committed: Boolean,
-                    snapshot: DataSnapshot?
-                ) {
-                    if (error != null) {
-                        cont.resumeWithException(
-                            Exception("Error en transacción: ${error.message}")
-                        )
-                    } else if (!committed) {
-                        cont.resumeWithException(
-                            Exception("Uno de los Pokémon ya no está disponible")
-                        )
-                    } else {
-                        cont.resume(Unit)
-                    }
+            override fun onComplete(
+                error: DatabaseError?,
+                committed: Boolean,
+                snapshot: DataSnapshot?
+            ) {
+                if (error != null) {
+                    cont.resumeWithException(Exception("Error en transacción: ${error.message}"))
+                } else if (!committed) {
+                    cont.resumeWithException(Exception("Uno de los Pokémon ya no está disponible"))
+                } else {
+                    cont.resume(Unit)
                 }
-            })
-        }
+            }
+        })
     }
 
-    suspend fun cancelExchange(exchangeId: String): kotlin.Result<Unit> {
-        return try {
-            exchangesRef.child(exchangeId)
-                .child("status")
-                .setValue(ExchangeStatus.CANCELLED.name)
-                .await()
-            kotlin.Result.success(Unit)
-        } catch (e: Exception) {
-            kotlin.Result.failure(e)
-        }
+    // ---------- Cancelar ----------
+    suspend fun cancelExchange(exchangeId: String): Result<Void?> = runCatching {
+        exchangesRef.child(exchangeId).child("status").setValue(ExchangeStatus.CANCELLED.name).await()
     }
 }
 
+// ------- Modelos -------
 data class ExchangeProposal(
     val id: String = "",
     val userAId: String = "",
@@ -274,9 +201,4 @@ data class ExchangeProposal(
     val completedAt: Long? = null
 )
 
-enum class ExchangeStatus {
-    PENDING,
-    COMPLETED,
-    CANCELLED,
-    EXPIRED
-}
+enum class ExchangeStatus { PENDING, COMPLETED, CANCELLED, EXPIRED }

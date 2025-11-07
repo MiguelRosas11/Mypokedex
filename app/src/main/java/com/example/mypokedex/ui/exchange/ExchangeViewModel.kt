@@ -3,12 +3,7 @@ package com.example.mypokedex.ui.exchange
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mypokedex.data.repository.AuthRepository
-import com.example.mypokedex.data.repository.ExchangeProposal
-import com.example.mypokedex.data.repository.ExchangeRepository
-import com.example.mypokedex.data.repository.FavoritePokemon
-import com.example.mypokedex.data.repository.FavoritesRepository
-import com.example.mypokedex.data.repository.ExchangeStatus
+import com.example.mypokedex.data.repository.*
 import com.example.mypokedex.util.QRCodeGenerator
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -38,44 +33,28 @@ class ExchangeViewModel(
     private val _state = MutableStateFlow(ExchangeState())
     val state: StateFlow<ExchangeState> = _state.asStateFlow()
 
-    private val _event = Channel<ExchangeEvent>()
+    private val _event = Channel<ExchangeEvent>(Channel.BUFFERED)
     val event = _event.receiveAsFlow()
 
-    init {
-        loadUserFavorites()
-    }
+    init { loadUserFavorites() }
 
     private fun loadUserFavorites() {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
             val userId = authRepo.getCurrentUserId()
-            if (userId != null) {
-                // !! CORREGIDO: Usar el nombre de función correcto
-                favoritesRepo.getUserFavorites(userId)
-                    .catch { e ->
-                        _state.update {
-                            it.copy(
-                                isLoading = false,
-                                exchangeError = e.message ?: "Error al cargar favoritos"
-                            )
-                        }
-                    }
-                    .collect { favorites ->
-                        _state.update {
-                            it.copy(
-                                isLoading = false,
-                                userFavorites = favorites
-                            )
-                        }
-                    }
-            } else {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        exchangeError = "Usuario no autenticado"
-                    )
-                }
+            if (userId == null) {
+                _state.update { it.copy(isLoading = false, exchangeError = "Usuario no autenticado") }
+                return@launch
             }
+
+            favoritesRepo.getUserFavorites(userId)
+                .onEach { favorites ->
+                    _state.update { it.copy(isLoading = false, userFavorites = favorites) }
+                }
+                .catch { e ->
+                    _state.update { it.copy(isLoading = false, exchangeError = e.message ?: "Error al cargar favoritos") }
+                }
+                .collect()
         }
     }
 
@@ -94,24 +73,13 @@ class ExchangeViewModel(
 
             result.fold(
                 onSuccess = { exchangeId ->
-                    // !! CORREGIDO: Usar el nombre de función correcto
+                    // Si en tu QRCodeGenerator la firma es (content, size), cambia aquí a (exchangeId, 300)
                     val bitmap = QRCodeGenerator.generateQRCode(exchangeId, 300, 300)
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            qrCodeBitmap = bitmap,
-                            currentExchangeId = exchangeId
-                        )
-                    }
+                    _state.update { it.copy(isLoading = false, qrCodeBitmap = bitmap, currentExchangeId = exchangeId) }
                     listenForExchangeUpdates(exchangeId)
                 },
                 onFailure = { error ->
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            exchangeError = error.message ?: "Error al crear propuesta"
-                        )
-                    }
+                    _state.update { it.copy(isLoading = false, exchangeError = error.message ?: "Error al crear propuesta") }
                 }
             )
         }
@@ -121,29 +89,16 @@ class ExchangeViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
             val proposal = exchangeRepo.getExchangeProposal(exchangeId)
-            if (proposal != null) {
-                if (proposal.status == ExchangeStatus.EXPIRED || proposal.status == ExchangeStatus.CANCELLED) {
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            exchangeError = "Este intercambio ya ha expirado o fue cancelado."
-                        )
-                    }
-                } else {
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            proposalToAccept = proposal
-                        )
-                    }
-                }
-            } else {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        exchangeError = "Propuesta de intercambio no encontrada o inválida."
-                    )
-                }
+            if (proposal == null) {
+                _state.update { it.copy(isLoading = false, exchangeError = "Propuesta no encontrada o inválida.") }
+                return@launch
+            }
+
+            when (proposal.status) {
+                ExchangeStatus.EXPIRED, ExchangeStatus.CANCELLED ->
+                    _state.update { it.copy(isLoading = false, exchangeError = "Este intercambio ya ha expirado o fue cancelado.") }
+                else ->
+                    _state.update { it.copy(isLoading = false, proposalToAccept = proposal) }
             }
         }
     }
@@ -153,7 +108,7 @@ class ExchangeViewModel(
             _state.update { it.copy(isLoading = true) }
             val userId = authRepo.getCurrentUserId() ?: return@launch
 
-            runCatching {
+            val op = runCatching {
                 exchangeRepo.acceptExchange(
                     exchangeId = exchangeId,
                     userBId = userId,
@@ -162,32 +117,21 @@ class ExchangeViewModel(
                     pokemonBName = pokemon.name,
                     pokemonBImageUrl = pokemon.imageUrl
                 )
-            }.fold(
-                onSuccess = { result ->
-                    result.fold(
-                        onSuccess = {
-                            _state.update { it.copy(isLoading = false) }
-                            _event.send(ExchangeEvent.ExchangeCompleted("¡Intercambio exitoso!"))
-                        },
-                        onFailure = { error ->
-                            _state.update {
-                                it.copy(
-                                    isLoading = false,
-                                    exchangeError = error.message ?: "Error al aceptar el intercambio"
-                                )
-                            }
-                        }
-                    )
-                },
-                onFailure = { error ->
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            exchangeError = error.message ?: "Error al aceptar el intercambio"
-                        )
+            }
+
+            op.onSuccess { result ->
+                result.fold(
+                    onSuccess = {
+                        _state.update { it.copy(isLoading = false) }
+                        _event.send(ExchangeEvent.ExchangeCompleted("¡Intercambio exitoso!"))
+                    },
+                    onFailure = { err ->
+                        _state.update { it.copy(isLoading = false, exchangeError = err.message ?: "Error al aceptar el intercambio") }
                     }
-                }
-            )
+                )
+            }.onFailure { err ->
+                _state.update { it.copy(isLoading = false, exchangeError = err.message ?: "Error al aceptar el intercambio") }
+            }
         }
     }
 
@@ -196,36 +140,18 @@ class ExchangeViewModel(
             exchangeRepo.observeExchangeProposal(exchangeId).collect { proposal ->
                 when (proposal?.status) {
                     ExchangeStatus.COMPLETED -> {
-                        _state.update {
-                            it.copy(
-                                isLoading = false,
-                                qrCodeBitmap = null,
-                                currentExchangeId = null
-                            )
-                        }
+                        _state.update { it.copy(isLoading = false, qrCodeBitmap = null, currentExchangeId = null) }
                         _event.send(ExchangeEvent.ExchangeCompleted("¡Intercambio completado!"))
                     }
                     ExchangeStatus.CANCELLED -> {
-                        _state.update {
-                            it.copy(
-                                isLoading = false,
-                                qrCodeBitmap = null,
-                                currentExchangeId = null
-                            )
-                        }
+                        _state.update { it.copy(isLoading = false, qrCodeBitmap = null, currentExchangeId = null) }
                         _event.send(ExchangeEvent.ExchangeFailed("El intercambio fue cancelado."))
                     }
                     ExchangeStatus.EXPIRED -> {
-                        _state.update {
-                            it.copy(
-                                isLoading = false,
-                                qrCodeBitmap = null,
-                                currentExchangeId = null
-                            )
-                        }
+                        _state.update { it.copy(isLoading = false, qrCodeBitmap = null, currentExchangeId = null) }
                         _event.send(ExchangeEvent.ExchangeFailed("El tiempo ha expirado."))
                     }
-                    else -> { /* Sigue en PENDING */ }
+                    else -> Unit // PENDING: no hacer nada
                 }
             }
         }
@@ -233,15 +159,9 @@ class ExchangeViewModel(
 
     fun cancelExchange() {
         viewModelScope.launch {
-            val exchangeId = _state.value.currentExchangeId ?: return@launch
-            exchangeRepo.cancelExchange(exchangeId)
-            _state.update {
-                it.copy(
-                    qrCodeBitmap = null,
-                    currentExchangeId = null,
-                    selectedPokemon = null
-                )
-            }
+            val id = _state.value.currentExchangeId ?: return@launch
+            exchangeRepo.cancelExchange(id)
+            _state.update { it.copy(qrCodeBitmap = null, currentExchangeId = null, selectedPokemon = null) }
         }
     }
 
