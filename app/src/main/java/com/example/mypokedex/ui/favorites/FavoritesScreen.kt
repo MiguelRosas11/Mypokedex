@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,9 +21,11 @@ import com.example.mypokedex.data.repository.FavoritePokemon
 fun FavoritesScreen(
     favorites: List<FavoritePokemon>,
     isLoading: Boolean,
+    error: String? = null,
     onBack: () -> Unit,
     onPokemonClick: (Int) -> Unit,
-    onRemoveFavorite: (Int) -> Unit
+    onRemoveFavorite: (Int) -> Unit,
+    onRetry: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -31,6 +34,13 @@ fun FavoritesScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "Volver")
+                    }
+                },
+                actions = {
+                    if (error != null) {
+                        IconButton(onClick = onRetry) {
+                            Icon(Icons.Default.Refresh, "Reintentar")
+                        }
                     }
                 }
             )
@@ -43,15 +53,52 @@ fun FavoritesScreen(
         ) {
             when {
                 isLoading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator()
+                        Text(
+                            text = "Cargando favoritos...",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
+                error != null -> {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "Error al cargar favoritos",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(onClick = onRetry) {
+                            Icon(Icons.Default.Refresh, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Reintentar")
+                        }
+                    }
                 }
 
                 favorites.isEmpty() -> {
                     Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
                             text = "No tienes favoritos aún",

@@ -9,9 +9,10 @@ import kotlinx.coroutines.tasks.await
 
 /**
  * Repository para gestionar autenticación con Firebase
- * Usa autenticación anónima para velocidad en la competencia
  */
-class AuthRepository {
+class AuthRepository(
+    private val userRepository: UserRepository = UserRepository()
+) {
     private val auth = FirebaseAuth.getInstance()
 
     /**
@@ -32,15 +33,14 @@ class AuthRepository {
     }
 
     /**
-     * Autenticación anónima (la mas quick para la compe)
-     * Genera un UID único que podemos personalizar
+     * Autenticación anónima con alias
      */
     suspend fun signInAnonymously(): Resource<FirebaseUser> {
         return try {
             val result = auth.signInAnonymously().await()
             val user = result.user
             if (user != null) {
-                Resource.Success(user) //
+                Resource.Success(user)
             } else {
                 Resource.Error("Error al autenticar")
             }
@@ -50,9 +50,7 @@ class AuthRepository {
     }
 
     /**
-     * Autenticacion con alias personalizado
-     * El usuario ingresa un alias corto (4-8 caracteres)
-     * Se crea una cuenta anonima y se usa el alias como identificador
+     * Autenticación con alias personalizado
      */
     suspend fun signInWithAlias(alias: String): Resource<String> {
         return try {
@@ -64,11 +62,25 @@ class AuthRepository {
             // Crear cuenta anónima
             val authResult = auth.signInAnonymously().await()
             val uid = authResult.user?.uid ?: return Resource.Error("Error al autenticar")
-            // El alias se guardará en Firebase Database junto con el UID
+
+            // Guardar alias en Firebase
+            val saved = userRepository.saveUserAlias(uid, alias)
+            if (!saved) {
+                return Resource.Error("Error al guardar alias")
+            }
+
             Resource.Success(uid)
         } catch (e: Exception) {
             Resource.Error("Error: ${e.localizedMessage}")
         }
+    }
+
+    /**
+     * Obtener alias del usuario actual
+     */
+    suspend fun getCurrentUserAlias(): String? {
+        val uid = getCurrentUserId() ?: return null
+        return userRepository.getUserAlias(uid)
     }
 
     /**

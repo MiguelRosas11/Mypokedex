@@ -60,7 +60,8 @@ fun AppNav() {
         networkMonitor = networkMonitor
     )
 
-    val authRepo = remember { AuthRepository() }
+    val userRepo = remember { UserRepository() }
+    val authRepo = remember { AuthRepository(userRepo) }
     val favoritesRepo = remember { FavoritesRepository() }
     val exchangeRepo = remember { ExchangeRepository(FirebaseDatabase.getInstance()) }
 
@@ -144,14 +145,6 @@ fun AppNav() {
                 }
             )
         }
-        //pantalla de aceptar intercambio
-
-
-
-
-
-
-
 
         // Pantalla de detalle
         composable(
@@ -210,13 +203,15 @@ fun AppNav() {
                 FavoritesScreen(
                     favorites = state.favorites,
                     isLoading = state.isLoading,
+                    error = state.error,
                     onBack = { nav.popBackStack() },
                     onPokemonClick = { pokemonId ->
                         nav.navigate(Dest.Detail.route(pokemonId))
                     },
                     onRemoveFavorite = { pokemonId ->
                         vm.removeFavorite(pokemonId)
-                    }
+                    },
+                    onRetry = { vm.retry() }
                 )
             }
         }
@@ -239,7 +234,15 @@ fun AppNav() {
 
                 val uiState by vm.state.collectAsState()
                 val userId = currentUser!!.uid
-                val userAlias = userId.take(6).uppercase()
+
+                // Obtener alias del usuario
+                var userAlias by remember { mutableStateOf(userId.take(6).uppercase()) }
+                LaunchedEffect(userId) {
+                    val alias = authRepo.getCurrentUserAlias()
+                    if (alias != null) {
+                        userAlias = alias
+                    }
+                }
 
                 // Mostrar QR Dialog si existe
                 if (uiState.currentExchangeId != null && uiState.qrCodeBitmap != null) {
@@ -266,7 +269,8 @@ fun AppNav() {
                 )
             }
         }
-        //pantalla de aceptar intercambio
+
+        // Pantalla de aceptar intercambio
         composable(
             Dest.AcceptExchange.route,
             arguments = listOf(navArgument("exchangeId") { type = NavType.StringType })
@@ -292,17 +296,23 @@ fun AppNav() {
 
                 val uiState by vm.state.collectAsState()
                 val userId = currentUser!!.uid
-                val userAlias = userId.take(6).uppercase()
+
+                // Obtener alias del usuario
+                var userAlias by remember { mutableStateOf(userId.take(6).uppercase()) }
+                LaunchedEffect(userId) {
+                    val alias = authRepo.getCurrentUserAlias()
+                    if (alias != null) {
+                        userAlias = alias
+                    }
+                }
 
                 // Observar eventos de intercambio
                 LaunchedEffect(Unit) {
                     vm.event.collect { event ->
                         when (event) {
                             is ExchangeEvent.ExchangeCompleted -> {
-                                // Mostrar mensaje de éxito y volver
                                 nav.popBackStack()
                             }
-
                             is ExchangeEvent.ExchangeFailed -> {
                                 // Error ya manejado en el ViewModel
                             }
@@ -328,6 +338,5 @@ fun AppNav() {
                 )
             }
         }
-
     }
 }

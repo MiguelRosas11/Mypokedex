@@ -21,29 +21,49 @@ class FavoritesViewModel(
     }
 
     private fun loadFavorites() {
-        val userId = authRepository.getCurrentUserId() ?: return
+        val userId = authRepository.getCurrentUserId()
+
+        if (userId == null) {
+            _state.update {
+                it.copy(
+                    isLoading = false,
+                    error = "Usuario no autenticado"
+                )
+            }
+            return
+        }
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
 
-            favoritesRepository.getUserFavorites(userId)
-                .catch { e ->
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            error = e.localizedMessage
-                        )
+            try {
+                favoritesRepository.getUserFavorites(userId)
+                    .catch { e ->
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                error = e.localizedMessage ?: "Error desconocido",
+                                favorites = emptyList()
+                            )
+                        }
                     }
-                }
-                .collect { favorites ->
-                    _state.update {
-                        it.copy(
-                            favorites = favorites,
-                            isLoading = false,
-                            error = null
-                        )
+                    .collect { favorites ->
+                        _state.update {
+                            it.copy(
+                                favorites = favorites,
+                                isLoading = false,
+                                error = null
+                            )
+                        }
                     }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        error = e.localizedMessage ?: "Error al cargar favoritos"
+                    )
                 }
+            }
         }
     }
 
@@ -51,8 +71,23 @@ class FavoritesViewModel(
         val userId = authRepository.getCurrentUserId() ?: return
 
         viewModelScope.launch {
-            favoritesRepository.removeFavorite(userId, pokemonId)
+            try {
+                val success = favoritesRepository.removeFavorite(userId, pokemonId)
+                if (!success) {
+                    _state.update {
+                        it.copy(error = "No se pudo eliminar el favorito")
+                    }
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(error = "Error al eliminar: ${e.localizedMessage}")
+                }
+            }
         }
+    }
+
+    fun retry() {
+        loadFavorites()
     }
 }
 
