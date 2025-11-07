@@ -113,17 +113,20 @@ class ExchangeRepository(
         val rootRef = firebaseDatabase.reference
         rootRef.runTransaction(object : Transaction.Handler {
             override fun doTransaction(current: MutableData): Transaction.Result {
-                try {
-                    val favRoot = current.child(favoritesRootPath)
-                    val favA = favRoot.child(userAId)
-                    val favB = favRoot.child(userBId)
+                return try {
+                    // RUTA CORRECTA: /users/{uid}/favorites
+                    val favA = current.child("users").child(userAId).child("favorites")
+                    val favB = current.child("users").child(userBId).child("favorites")
 
                     val nodeA = favA.child(pokemonAId.toString())
                     val nodeB = favB.child(pokemonBId.toString())
 
                     val existsA = nodeA.value != null
                     val existsB = nodeB.value != null
-                    if (!existsA || !existsB) return Transaction.abort()
+                    if (!existsA || !existsB) {
+                        // No existe uno de los dos → aborta sin efectos
+                        return Transaction.abort()
+                    }
 
                     // Elimina originales
                     nodeA.value = null
@@ -145,7 +148,7 @@ class ExchangeRepository(
                     favA.child(pokemonBId.toString()).value = dataForA
                     favB.child(pokemonAId.toString()).value = dataForB
 
-                    // Actualiza propuesta a COMPLETED (y guarda info del B que aceptó)
+                    // Marca COMPLETED (tu enum usa COMPLETED)
                     val exNode = current.child("exchanges").child(exchangeId)
                     exNode.child("userBId").value = userBId
                     exNode.child("userBAlias").value = userBAlias
@@ -155,9 +158,9 @@ class ExchangeRepository(
                     exNode.child("status").value = ExchangeStatus.COMPLETED.name
                     exNode.child("completedAt").value = System.currentTimeMillis()
 
-                    return Transaction.success(current)
+                    Transaction.success(current)
                 } catch (_: Exception) {
-                    return Transaction.abort()
+                    Transaction.abort()
                 }
             }
 
@@ -176,7 +179,6 @@ class ExchangeRepository(
             }
         })
     }
-
     // ---------- Cancelar ----------
     suspend fun cancelExchange(exchangeId: String): Result<Void?> = runCatching {
         exchangesRef.child(exchangeId).child("status").setValue(ExchangeStatus.CANCELLED.name).await()
