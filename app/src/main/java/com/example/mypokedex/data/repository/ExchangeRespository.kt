@@ -11,7 +11,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 
 class ExchangeRepository(
     private val firebaseDatabase: FirebaseDatabase = FirebaseDatabase.getInstance(),
-    // Se inyecta (desde NavGraph)
     private val favoritesRepository: FavoritesRepository
 ) {
     private val exchangesRef = firebaseDatabase.getReference("exchanges")
@@ -105,7 +104,7 @@ class ExchangeRepository(
             }
 
             val now = System.currentTimeMillis()
-            if (now - proposal.createdAt > 90_000) { // Timeout de 90 segundos
+            if (now - proposal.createdAt > 90_000) {
                 exchangesRef.child(exchangeId)
                     .child("status")
                     .setValue(ExchangeStatus.EXPIRED.name)
@@ -117,20 +116,19 @@ class ExchangeRepository(
                 return kotlin.Result.failure(Exception("No puedes intercambiar contigo mismo."))
             }
 
-            // !! Verificación de pre-transacción !!
+            // !! VERIFICACIÓN PRE-TRANSACCIÓN !!
             val userAHasPokemon = favoritesRepository.isFavorite(proposal.userAId, proposal.pokemonAId)
             if (!userAHasPokemon) {
                 exchangesRef.child(exchangeId).child("status").setValue(ExchangeStatus.CANCELLED.name).await()
-                return kotlin.Result.failure(Exception("Error: ${proposal.userAAlias} ya no tiene a ${proposal.pokemonAName}."))
+                return kotlin.Result.failure(Exception("${proposal.userAAlias} ya no tiene a ${proposal.pokemonAName}"))
             }
 
             val userBHasPokemon = favoritesRepository.isFavorite(userBId, pokemonBId)
             if (!userBHasPokemon) {
-                // No es necesario cancelar, User B puede re-intentar
-                return kotlin.Result.failure(Exception("Error: No tienes a $pokemonBName en tus favoritos."))
+                return kotlin.Result.failure(Exception("No tienes a $pokemonBName en tus favoritos"))
             }
 
-            // Si todo está bien, ejecutar la transacción atómica
+            // Ejecutar transacción atómica
             executeAtomicExchange(
                 exchangeId = exchangeId,
                 userAId = proposal.userAId,
@@ -150,6 +148,10 @@ class ExchangeRepository(
         }
     }
 
+    /**
+     * !! FUNCIÓN CORREGIDA !!
+     * Ejecuta la transacción atómica de intercambio
+     */
     private suspend fun executeAtomicExchange(
         exchangeId: String,
         userAId: String,
@@ -167,55 +169,58 @@ class ExchangeRepository(
             ref.runTransaction(object : Transaction.Handler {
                 override fun doTransaction(currentData: MutableData): Transaction.Result {
                     try {
-                        val pokemonAData = currentData
-                            .child("favorites")
-                            .child(userAId)
-                            .child(pokemonAId.toString())
-                        val pokemonBData = currentData
-                            .child("favorites")
-                            .child(userBId)
-                            .child(pokemonBId.toString())
+                        // Obtener referencias a los Pokémon
+                        val favUserA = currentData.child("favorites").child(userAId)
+                        val favUserB = currentData.child("favorites").child(userBId)
 
-                        // Doble verificación: si no existen, abortar.
-                        if (pokemonAData.value == null || pokemonBData.value == null) {
+                        val pokemonAData = favUserA.child(pokemonAId.toString())
+                        val pokemonBData = favUserB.child(pokemonBId.toString())
+
+                        // !! VERIFICACIÓN CRÍTICA: Los Pokémon deben existir !!
+                        val pokemonAExists = pokemonAData.value != null
+                        val pokemonBExists = pokemonBData.value != null
+
+                        if (!pokemonAExists || !pokemonBExists) {
+                            // Si alguno no existe, abortar la transacción
                             return Transaction.abort()
                         }
 
-                        // !! INICIO DE CORRECCIÓN !!
-                        // Eliminar Pokémon de dueños originales
+                        // PASO 1: Eliminar los Pokémon de sus dueños originales
                         pokemonAData.value = null
                         pokemonBData.value = null
 
-                        // Agregar Pokémon a nuevos dueños usando la lógica
-                        // original de 'mapOf' (que era la correcta)
-                        currentData.child("favorites").child(userAId)
-                            .child(pokemonBId.toString()).value = mapOf(
+                        // PASO 2: Crear los datos de los nuevos Pokémon
+                        val newPokemonBDataForUserA = mapOf(
                             "id" to pokemonBId,
                             "name" to pokemonBName,
                             "imageUrl" to pokemonBImageUrl,
                             "addedAt" to System.currentTimeMillis()
                         )
-                        currentData.child("favorites").child(userBId)
-                            .child(pokemonAId.toString()).value = mapOf(
+
+                        val newPokemonADataForUserB = mapOf(
                             "id" to pokemonAId,
                             "name" to pokemonAName,
                             "imageUrl" to pokemonAImageUrl,
                             "addedAt" to System.currentTimeMillis()
                         )
-                        // !! FIN DE CORRECCIÓN !!
 
-                        // Actualizar estado del intercambio
-                        val exchPath = currentData.child("exchanges").child(exchangeId)
-                        exchPath.child("userBId").value = userBId
-                        exchPath.child("userBAlias").value = userBAlias
-                        exchPath.child("pokemonBId").value = pokemonBId
-                        exchPath.child("pokemonBName").value = pokemonBName
-                        exchPath.child("pokemonBImageUrl").value = pokemonBImageUrl
-                        exchPath.child("status").value = ExchangeStatus.COMPLETED.name
-                        exchPath.child("completedAt").value = System.currentTimeMillis()
+                        // PASO 3: Asignar los Pokémon a sus nuevos dueños
+                        favUserA.child(pokemonBId.toString()).value = newPokemonBDataForUserA
+                        favUserB.child(pokemonAId.toString()).value = newPokemonADataForUserB
+
+                        // PASO 4: Actualizar el estado del intercambio
+                        val exchangeData = currentData.child("exchanges").child(exchangeId)
+                        exchangeData.child("userBId").value = userBId
+                        exchangeData.child("userBAlias").value = userBAlias
+                        exchangeData.child("pokemonBId").value = pokemonBId
+                        exchangeData.child("pokemonBName").value = pokemonBName
+                        exchangeData.child("pokemonBImageUrl").value = pokemonBImageUrl
+                        exchangeData.child("status").value = ExchangeStatus.COMPLETED.name
+                        exchangeData.child("completedAt").value = System.currentTimeMillis()
 
                         return Transaction.success(currentData)
                     } catch (e: Exception) {
+                        e.printStackTrace()
                         return Transaction.abort()
                     }
                 }
@@ -226,10 +231,13 @@ class ExchangeRepository(
                     snapshot: DataSnapshot?
                 ) {
                     if (error != null) {
-                        cont.resumeWithException(error.toException())
+                        cont.resumeWithException(
+                            Exception("Error en transacción: ${error.message}")
+                        )
                     } else if (!committed) {
-                        // Esto es lo que causaba el "Transaction aborted"
-                        cont.resumeWithException(Exception("Transaction aborted"))
+                        cont.resumeWithException(
+                            Exception("Uno de los Pokémon ya no está disponible")
+                        )
                     } else {
                         cont.resume(Unit)
                     }
