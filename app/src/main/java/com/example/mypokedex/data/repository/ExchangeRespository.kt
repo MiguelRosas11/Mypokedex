@@ -116,33 +116,31 @@ class ExchangeRepository(
                 return kotlin.Result.failure(Exception("No puedes intercambiar contigo mismo."))
             }
 
-            // !! VERIFICACIÓN PRE-TRANSACCIÓN !!
-            val userAHasPokemon = favoritesRepository.isFavorite(proposal.userAId, proposal.pokemonAId)
-            if (!userAHasPokemon) {
-                exchangesRef.child(exchangeId).child("status").setValue(ExchangeStatus.CANCELLED.name).await()
-                return kotlin.Result.failure(Exception("${proposal.userAAlias} ya no tiene a ${proposal.pokemonAName}"))
-            }
-
-            val userBHasPokemon = favoritesRepository.isFavorite(userBId, pokemonBId)
-            if (!userBHasPokemon) {
-                return kotlin.Result.failure(Exception("No tienes a $pokemonBName en tus favoritos"))
-            }
 
             // Ejecutar transacción atómica
-            executeAtomicExchange(
-                exchangeId = exchangeId,
-                userAId = proposal.userAId,
-                userBId = userBId,
-                userBAlias = userBAlias,
-                pokemonAId = proposal.pokemonAId,
-                pokemonAName = proposal.pokemonAName,
-                pokemonAImageUrl = proposal.pokemonAImageUrl,
-                pokemonBId = pokemonBId,
-                pokemonBName = pokemonBName,
-                pokemonBImageUrl = pokemonBImageUrl
+            return runCatching {
+                executeAtomicExchange(
+                    exchangeId = exchangeId,
+                    userAId = proposal.userAId,
+                    userBId = userBId,
+                    userBAlias = userBAlias,
+                    pokemonAId = proposal.pokemonAId,
+                    pokemonAName = proposal.pokemonAName,
+                    pokemonAImageUrl = proposal.pokemonAImageUrl,
+                    pokemonBId = pokemonBId,
+                    pokemonBName = pokemonBName,
+                    pokemonBImageUrl = pokemonBImageUrl
+                )
+            }.fold(
+                onSuccess = { kotlin.Result.success(Unit) },
+                onFailure = { e ->
+                    // Si la transacción abortó, reflejar CANCELLED para que el otro equipo lo vea
+                    exchangesRef.child(exchangeId).child("status")
+                        .setValue(ExchangeStatus.CANCELLED.name)
+                        .await()
+                    kotlin.Result.failure(e)
+                }
             )
-
-            kotlin.Result.success(Unit)
         } catch (e: Exception) {
             kotlin.Result.failure(e)
         }
