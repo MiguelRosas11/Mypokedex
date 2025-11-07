@@ -14,6 +14,10 @@ composeBom = "2024.09.00"
 # Navigation
 navigationCompose = "2.9.4"
 
+#para la camara el QR
+camerax = "1.4.0"
+mlkitBarcode = "17.3.0"
+
 # Firebase
 firebaseBom = "33.7.0"
 playServicesAuth = "21.2.0"
@@ -70,6 +74,13 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-runtime-saveable = { group = "androidx.compose.runtime", name = "runtime-saveable" }
 
+# CameraX
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+
+# ML Kit
+mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcode" }
 
 # Navigation
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }

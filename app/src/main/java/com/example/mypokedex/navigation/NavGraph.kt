@@ -263,8 +263,9 @@ fun AppNav() {
                     onCreateProposal = { pokemon ->
                         vm.createExchangeProposal(pokemon, userAlias)
                     },
-                    onScanQR = {
-                        // Implementar escaneo de QR en futuro
+                    onScanQR = { exchangeId ->
+                        // Navegar a la pantalla de aceptar intercambio con el ID escaneado
+                        nav.navigate(Dest.AcceptExchange.route(exchangeId))
                     }
                 )
             }
@@ -311,10 +312,13 @@ fun AppNav() {
                     vm.event.collect { event ->
                         when (event) {
                             is ExchangeEvent.ExchangeCompleted -> {
-                                nav.popBackStack()
+                                // Volver a la pantalla de favoritos tras completar
+                                nav.popBackStack(Dest.Favorites.route, inclusive = false)
                             }
                             is ExchangeEvent.ExchangeFailed -> {
                                 // Error ya manejado en el ViewModel
+                                // Opcionalmente volver atrás
+                                nav.popBackStack()
                             }
                         }
                     }
