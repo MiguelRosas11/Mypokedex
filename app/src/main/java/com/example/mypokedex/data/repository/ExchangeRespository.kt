@@ -11,6 +11,7 @@ import kotlin.coroutines.resumeWithException
 
 /**
  * Repository para gestionar intercambios de Pokémon
+ *  CORREGIDO: Solo recibe FirebaseDatabase como parámetro
  */
 class ExchangeRepository(
     private val firebaseDatabase: FirebaseDatabase = FirebaseDatabase.getInstance()
@@ -108,12 +109,11 @@ class ExchangeRepository(
                 return kotlin.Result.failure(Exception("Intercambio expirado"))
             }
 
-            // ✅ Verificar que ambos usuarios aún tengan los Pokémon seleccionados
+            //  Verificar que ambos usuarios aún tengan los Pokémon seleccionados
             val missingForUserA = !favoriteExists(proposal.userAId, proposal.pokemonAId)
             val missingForUserB = !favoriteExists(userBId, pokemonBId)
 
             if (missingForUserA || missingForUserB) {
-                // Cancela la propuesta para evitar que otro usuario siga intentando
                 exchangesRef.child(exchangeId)
                     .child("status")
                     .setValue(ExchangeStatus.CANCELLED.name)
@@ -132,7 +132,7 @@ class ExchangeRepository(
                 return kotlin.Result.failure(IllegalStateException(message))
             }
 
-            // Transacción atómica
+            //  Transacción atómica
             executeAtomicExchange(
                 exchangeId = exchangeId,
                 userAId = proposal.userAId,
@@ -152,13 +152,17 @@ class ExchangeRepository(
         }
     }
 
+    /**
+     *  Verificar si un favorito existe
+     */
     private suspend fun favoriteExists(userId: String, pokemonId: Int): Boolean {
         val snap = favoritesRef.child(userId).child(pokemonId.toString()).get().await()
         return snap.exists()
     }
 
     /**
-     * Transacción atómica en Realtime Database
+     *  Transacción atómica en Realtime Database
+     * Modifica favorites y exchanges en una sola operación
      */
     private suspend fun executeAtomicExchange(
         exchangeId: String,
@@ -174,14 +178,17 @@ class ExchangeRepository(
     ) {
         suspendCancellableCoroutine<Unit> { cont ->
             val rootRef = firebaseDatabase.reference
+
             rootRef.runTransaction(object : Transaction.Handler {
                 override fun doTransaction(currentData: MutableData): Transaction.Result {
                     return try {
                         val favs = currentData.child("favorites")
 
+                        // Funciones auxiliares para manipular favoritos
                         fun removeFavorite(u: String, p: Int) {
                             favs.child(u).child(p.toString()).value = null
                         }
+
                         fun addFavorite(u: String, p: Int, name: String, img: String) {
                             favs.child(u).child(p.toString()).value = mapOf(
                                 "id" to p,
@@ -191,13 +198,13 @@ class ExchangeRepository(
                             )
                         }
 
-                        // ✅ Aquí ya NO abortamos por inexistencia: ya se validó afuera
+                        //  Intercambiar Pokémon
                         removeFavorite(userAId, pokemonAId)
                         removeFavorite(userBId, pokemonBId)
                         addFavorite(userAId, pokemonBId, pokemonBName, pokemonBImageUrl)
                         addFavorite(userBId, pokemonAId, pokemonAName, pokemonAImageUrl)
 
-                        // Actualizar estado del intercambio
+                        // ctualizar estado del intercambio
                         val exchPath = currentData.child("exchanges").child(exchangeId)
                         exchPath.child("userBId").value = userBId
                         exchPath.child("userBAlias").value = userBAlias
@@ -230,6 +237,9 @@ class ExchangeRepository(
         }
     }
 
+    /**
+     * Cancelar intercambio
+     */
     suspend fun cancelExchange(exchangeId: String): kotlin.Result<Unit> {
         return try {
             exchangesRef.child(exchangeId)
@@ -243,6 +253,9 @@ class ExchangeRepository(
     }
 }
 
+/**
+ * Modelo de datos para propuestas de intercambio
+ */
 data class ExchangeProposal(
     val id: String = "",
     val userAId: String = "",
@@ -260,6 +273,9 @@ data class ExchangeProposal(
     val completedAt: Long? = null
 )
 
+/**
+ * Estados posibles de un intercambio
+ */
 enum class ExchangeStatus {
     PENDING,
     COMPLETED,

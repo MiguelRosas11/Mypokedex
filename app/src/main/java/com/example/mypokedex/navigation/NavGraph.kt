@@ -61,12 +61,15 @@ fun AppNav() {
         networkMonitor = networkMonitor
     )
 
-    // !! CORREGIDO: Inicializar repositorios en el orden correcto
+    // ORREGIDO: Inicializar repositorios en el orden correcto
     val userRepo = remember { UserRepository() }
-    val authRepo = remember { AuthRepository(userRepo) } // userRepo se inyecta en authRepo
+    val authRepo = remember { AuthRepository(userRepo) }
     val favoritesRepo = remember { FavoritesRepository() }
-    // !! CORREGIDO: Inyectar favoritesRepo en exchangeRepo
-    val exchangeRepo = remember { ExchangeRepository(FirebaseDatabase.getInstance(), favoritesRepo) }
+
+    //  CORREGIDO: Solo pasar FirebaseDatabase (1 parámetro)
+    val exchangeRepo = remember {
+        ExchangeRepository(FirebaseDatabase.getInstance())
+    }
 
     // Estado de autenticación
     val currentUser by authRepo.currentUser.collectAsState(initial = null)
@@ -255,7 +258,6 @@ fun AppNav() {
                             }
                             is ExchangeEvent.ExchangeFailed -> {
                                 Toast.makeText(context, event.error, Toast.LENGTH_SHORT).show()
-                                // No saques al usuario, el VM resetea el QR
                             }
                         }
                     }
@@ -346,12 +348,12 @@ fun AppNav() {
                     },
                     userFavorites = uiState.userFavorites,
                     isLoading = uiState.isLoading,
-                    error = uiState.exchangeError, // Pasa el error
+                    error = uiState.exchangeError,
                     onBack = { nav.popBackStack() },
                     onAccept = { pokemon ->
                         vm.acceptExchange(exchangeId, userAlias, pokemon)
                     },
-                    onErrorDismiss = { vm.clearError() } // Limpia el error
+                    onErrorDismiss = { vm.clearError() }
                 )
             }
         }
